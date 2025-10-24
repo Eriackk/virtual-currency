@@ -3,74 +3,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Virtual Currency Chart</title>
+  <title>ACA 实时价格监控</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
-      background-color: #111;
+      background-color: #0f111a;
       color: #fff;
       text-align: center;
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
     }
+    h1 {
+      color: #00ff88;
+      margin: 30px 0 10px;
+    }
     .chart-container {
       position: relative;
       width: 90vw;
       height: 70vh;
-      margin: 40px auto;
+      margin: 20px auto;
+    }
+    .time {
+      color: #aaa;
+      font-size: 0.9em;
     }
   </style>
 </head>
 <body>
-  <h2>随机虚拟币价格走势</h2>
+  <h1>ACA / USDT 实时价格走势</h1>
+  <div class="time" id="updateTime">加载中...</div>
   <div class="chart-container">
-    <canvas id="priceChart"></canvas>
+    <canvas id="acaChart"></canvas>
   </div>
 
   <script>
-    const ctx = document.getElementById('priceChart').getContext('2d');
+    const ctx = document.getElementById('acaChart').getContext('2d');
+    let acaChart;
 
-    function randomData() {
-      const data = [];
-      let value = 100;
-      for (let i = 0; i < 20; i++) {
-        value += (Math.random() - 0.5) * 10;
-        data.push(value.toFixed(2));
-      }
-      return data;
+    // 初始化空图表
+    function initChart() {
+      acaChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'ACA/USDT 收盘价 (USD)',
+            data: [],
+            borderColor: '#00ff88',
+            backgroundColor: 'rgba(0,255,136,0.2)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#aaa' } },
+            y: { ticks: { color: '#aaa' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
+        }
+      });
     }
 
-    const labels = Array.from({ length: 20 }, (_, i) => `T${i + 1}`);
-    const data = {
-      labels: labels,
-      datasets: [{
-        label: 'Random Coin Price (USD)',
-        data: randomData(),
-        borderColor: '#4caf50',
-        backgroundColor: 'rgba(76, 175, 80, 0.2)',
-        borderWidth: 2,
-        tension: 0.3
-      }]
-    };
+    // 从OKX获取历史价格
+    async function fetchACAData() {
+      try {
+        const res = await fetch('https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=1m&limit=60');
+        const json = await res.json();
+        const raw = json.data.reverse(); // 时间顺序调整
 
-    const config = {
-      type: 'line',
-      data: data,
-      options: {
-        responsive: true,
-        maintainAspectRatio: false, // 关键：允许自适应高度
-        scales: {
-          x: { ticks: { color: '#aaa' } },
-          y: { ticks: { color: '#aaa' } }
-        },
-        plugins: {
-          legend: { labels: { color: '#fff' } }
-        }
+        const labels = raw.map(d => new Date(+d[0]).toLocaleTimeString());
+        const prices = raw.map(d => parseFloat(d[4]));
+
+        acaChart.data.labels = labels;
+        acaChart.data.datasets[0].data = prices;
+        acaChart.update();
+
+        document.getElementById('updateTime').innerText =
+          '更新时间：' + new Date().toLocaleTimeString();
+      } catch (e) {
+        console.error(e);
+        document.getElementById('updateTime').innerText = '数据获取失败';
       }
-    };
+    }
 
-    new Chart(ctx, config);
+    initChart();
+    fetchACAData();
+    setInterval(fetchACAData, 10000); // 每10秒更新一次
   </script>
 </body>
 </html>
