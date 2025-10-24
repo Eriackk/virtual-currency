@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACA 实时价格监控</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #0f111a;
+  color: white;
+  text-align: center;
+  margin-top: 100px;
+}
+h1 {
+  color: #00ff88;
+  margin-bottom: 10px;
+}
+.price {
+  font-size: 2em;
+  font-weight: bold;
+}
+.time {
+  color: #aaa;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+  <h1>ACA / USDT 实时价格</h1>
+  <div id="price" class="price">加载中...</div>
+  <div id="time" class="time"></div>
+
+<script>
+async function updatePrice() {
+  try {
+    const res = await fetch('https://www.okx.com/api/v5/market/ticker?instId=ACA-USDT');
+    const data = await res.json();
+    const price = parseFloat(data.data[0].last).toFixed(6);
+    document.getElementById('price').innerText = price + ' USD';
+    document.getElementById('time').innerText = '更新时间：' + new Date().toLocaleTimeString();
+  } catch (err) {
+    document.getElementById('price').innerText = '获取失败';
+  }
+}
+updatePrice();
+setInterval(updatePrice, 3000);
+</script>
+</body>
+</html>
