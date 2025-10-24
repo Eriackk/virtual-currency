@@ -45,6 +45,7 @@
       width: 90vw;
       height: 70vh;
       margin: auto;
+      touch-action: none; /* 关键：允许Chart.js接管触控缩放与拖动 */
     }
   </style>
 </head>
@@ -56,6 +57,7 @@
     <button data-bar="1H">1小时</button>
     <button data-bar="1D">1天</button>
     <button data-bar="1W">1周</button>
+    <button id="resetZoomBtn">重置缩放</button>
   </div>
   <div class="chart-container">
     <canvas id="acaChart"></canvas>
@@ -69,15 +71,18 @@
     function initChart() {
       acaChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: [], datasets: [{
-          label: 'ACA/USDT 收盘价 (USD)',
-          data: [],
-          borderColor: '#00ff88',
-          backgroundColor: 'rgba(0,255,136,0.2)',
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 2
-        }]},
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'ACA/USDT 收盘价 (USD)',
+            data: [],
+            borderColor: '#00ff88',
+            backgroundColor: 'rgba(0,255,136,0.2)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          }]
+        },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -89,8 +94,8 @@
             legend: { labels: { color: '#fff' } },
             zoom: {
               zoom: {
-                pinch: { enabled: true },
-                drag: { enabled: false },
+                wheel: { enabled: false }, // 禁止滚轮缩放
+                pinch: { enabled: true },  // 启用双指缩放
                 mode: 'x'
               },
               pan: {
@@ -124,7 +129,7 @@
       }
     }
 
-    // 按钮事件
+    // 周期切换
     document.querySelectorAll('button[data-bar]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('button[data-bar]').forEach(b => b.classList.remove('active'));
@@ -132,6 +137,11 @@
         currentBar = btn.dataset.bar;
         fetchACAData(currentBar);
       });
+    });
+
+    // 重置缩放
+    document.getElementById('resetZoomBtn').addEventListener('click', () => {
+      acaChart.resetZoom();
     });
 
     initChart();
