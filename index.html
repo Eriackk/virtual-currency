@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ACA 实时价格监控</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
   <style>
     body {
       background-color: #0f111a;
@@ -16,23 +17,46 @@
     }
     h1 {
       color: #00ff88;
-      margin: 30px 0 10px;
+      margin: 20px 0 10px;
+    }
+    .time {
+      color: #aaa;
+      font-size: 0.9em;
+      margin-bottom: 10px;
+    }
+    .buttons {
+      margin-bottom: 10px;
+    }
+    button {
+      background: #1b1e2b;
+      color: #00ff88;
+      border: 1px solid #00ff88;
+      border-radius: 5px;
+      padding: 6px 12px;
+      margin: 3px;
+      cursor: pointer;
+    }
+    button:hover, button.active {
+      background: #00ff88;
+      color: #0f111a;
     }
     .chart-container {
       position: relative;
       width: 90vw;
       height: 70vh;
-      margin: 20px auto;
-    }
-    .time {
-      color: #aaa;
-      font-size: 0.9em;
+      margin: auto;
     }
   </style>
 </head>
 <body>
   <h1>ACA / USDT 实时价格走势</h1>
   <div class="time" id="updateTime">加载中...</div>
+  <div class="buttons">
+    <button data-bar="1m" class="active">1分钟</button>
+    <button data-bar="1H">1小时</button>
+    <button data-bar="1D">1天</button>
+    <button data-bar="1W">1周</button>
+  </div>
   <div class="chart-container">
     <canvas id="acaChart"></canvas>
   </div>
@@ -40,23 +64,20 @@
   <script>
     const ctx = document.getElementById('acaChart').getContext('2d');
     let acaChart;
+    let currentBar = '1m';
 
-    // 初始化空图表
     function initChart() {
       acaChart = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            label: 'ACA/USDT 收盘价 (USD)',
-            data: [],
-            borderColor: '#00ff88',
-            backgroundColor: 'rgba(0,255,136,0.2)',
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 2
-          }]
-        },
+        data: { labels: [], datasets: [{
+          label: 'ACA/USDT 收盘价 (USD)',
+          data: [],
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0,255,136,0.2)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 2
+        }]},
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -65,20 +86,30 @@
             y: { ticks: { color: '#aaa' } }
           },
           plugins: {
-            legend: { labels: { color: '#fff' } }
+            legend: { labels: { color: '#fff' } },
+            zoom: {
+              zoom: {
+                pinch: { enabled: true },
+                drag: { enabled: false },
+                mode: 'x'
+              },
+              pan: {
+                enabled: true,
+                mode: 'x'
+              }
+            }
           }
         }
       });
     }
 
-    // 从OKX获取历史价格
-    async function fetchACAData() {
+    async function fetchACAData(bar = '1m') {
       try {
-        const res = await fetch('https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=1m&limit=60');
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=${bar}&limit=100`);
         const json = await res.json();
-        const raw = json.data.reverse(); // 时间顺序调整
+        const raw = json.data.reverse();
 
-        const labels = raw.map(d => new Date(+d[0]).toLocaleTimeString());
+        const labels = raw.map(d => new Date(+d[0]).toLocaleString());
         const prices = raw.map(d => parseFloat(d[4]));
 
         acaChart.data.labels = labels;
@@ -87,15 +118,25 @@
 
         document.getElementById('updateTime').innerText =
           '更新时间：' + new Date().toLocaleTimeString();
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error(err);
         document.getElementById('updateTime').innerText = '数据获取失败';
       }
     }
 
+    // 按钮事件
+    document.querySelectorAll('button[data-bar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('button[data-bar]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentBar = btn.dataset.bar;
+        fetchACAData(currentBar);
+      });
+    });
+
     initChart();
-    fetchACAData();
-    setInterval(fetchACAData, 10000); // 每10秒更新一次
+    fetchACAData(currentBar);
+    setInterval(() => fetchACAData(currentBar), 15000); // 每15秒刷新一次
   </script>
 </body>
 </html>
