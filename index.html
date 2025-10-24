@@ -45,31 +45,18 @@
       width: 90vw;
       height: 70vh;
       margin: auto;
-      touch-action: none;
     }
   </style>
 </head>
 <body>
   <h1>ACA / USDT 实时价格走势</h1>
   <div class="time" id="updateTime">加载中...</div>
-
-  <!-- 周期选择 -->
   <div class="buttons">
     <button data-bar="1m" class="active">1分钟</button>
     <button data-bar="1H">1小时</button>
     <button data-bar="1D">1天</button>
     <button data-bar="1W">1周</button>
   </div>
-
-  <!-- 缩放控制 -->
-  <div class="buttons">
-    <button id="zoomIn">＋ 放大</button>
-    <button id="zoomOut">－ 缩小</button>
-    <button id="panLeft">← 左移</button>
-    <button id="panRight">→ 右移</button>
-    <button id="resetZoom">重置</button>
-  </div>
-
   <div class="chart-container">
     <canvas id="acaChart"></canvas>
   </div>
@@ -79,23 +66,18 @@
     let acaChart;
     let currentBar = '1m';
 
-    Chart.register(window['chartjs-plugin-zoom']);
-
     function initChart() {
       acaChart = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            label: 'ACA/USDT 收盘价 (USD)',
-            data: [],
-            borderColor: '#00ff88',
-            backgroundColor: 'rgba(0,255,136,0.2)',
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 2
-          }]
-        },
+        data: { labels: [], datasets: [{
+          label: 'ACA/USDT 收盘价 (USD)',
+          data: [],
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0,255,136,0.2)',
+          borderWidth: 2,
+          tension: 0.3,
+          pointRadius: 2
+        }]},
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -107,12 +89,12 @@
             legend: { labels: { color: '#fff' } },
             zoom: {
               zoom: {
-                wheel: { enabled: false },
-                pinch: { enabled: false },
+                pinch: { enabled: true },
+                drag: { enabled: false },
                 mode: 'x'
               },
               pan: {
-                enabled: false,
+                enabled: true,
                 mode: 'x'
               }
             }
@@ -142,7 +124,7 @@
       }
     }
 
-    // 周期切换
+    // 按钮事件
     document.querySelectorAll('button[data-bar]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('button[data-bar]').forEach(b => b.classList.remove('active'));
@@ -151,13 +133,6 @@
         fetchACAData(currentBar);
       });
     });
-
-    // 缩放和平移控制
-    document.getElementById('zoomIn').addEventListener('click', () => acaChart.zoom(1.2));
-    document.getElementById('zoomOut').addEventListener('click', () => acaChart.zoom(0.8));
-    document.getElementById('panLeft').addEventListener('click', () => acaChart.pan({x: -100}, undefined, 'default'));
-    document.getElementById('panRight').addEventListener('click', () => acaChart.pan({x: 100}, undefined, 'default'));
-    document.getElementById('resetZoom').addEventListener('click', () => acaChart.resetZoom());
 
     initChart();
     fetchACAData(currentBar);
