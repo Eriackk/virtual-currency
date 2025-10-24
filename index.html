@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ACA 实时价格监控</title>
+  <title>虚拟币价格监控</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
   <style>
     body {
       background-color: #0f111a;
@@ -19,65 +18,65 @@
       color: #00ff88;
       margin: 20px 0 10px;
     }
+    .chart-container {
+      position: relative;
+      width: 90vw;
+      height: 70vh;
+      margin: 20px auto;
+    }
     .time {
       color: #aaa;
       font-size: 0.9em;
       margin-bottom: 10px;
     }
-    .buttons {
-      margin-bottom: 10px;
-    }
-    button {
-      background: #1b1e2b;
+    input, button {
+      background: #1a1c2c;
       color: #00ff88;
       border: 1px solid #00ff88;
-      border-radius: 5px;
-      padding: 6px 12px;
-      margin: 3px;
-      cursor: pointer;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 1em;
+      margin: 5px;
     }
-    button:hover, button.active {
+    button:hover {
       background: #00ff88;
       color: #0f111a;
-    }
-    .chart-container {
-      position: relative;
-      width: 90vw;
-      height: 70vh;
-      margin: auto;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>ACA / USDT 实时价格走势</h1>
-  <div class="time" id="updateTime">加载中...</div>
-  <div class="buttons">
-    <button data-bar="1m" class="active">1分钟</button>
-    <button data-bar="1H">1小时</button>
-    <button data-bar="1D">1天</button>
-    <button data-bar="1W">1周</button>
+  <h1>虚拟币历史价格走势</h1>
+
+  <div>
+    <input id="coinInput" type="text" placeholder="输入币种，如 ACA 或 BTC" />
+    <button onclick="updateChart()">更新图表</button>
   </div>
+
+  <div class="time" id="updateTime">加载中...</div>
   <div class="chart-container">
-    <canvas id="acaChart"></canvas>
+    <canvas id="coinChart"></canvas>
   </div>
 
   <script>
-    const ctx = document.getElementById('acaChart').getContext('2d');
-    let acaChart;
-    let currentBar = '1m';
+    const ctx = document.getElementById('coinChart').getContext('2d');
+    let coinChart;
 
     function initChart() {
-      acaChart = new Chart(ctx, {
+      coinChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: [], datasets: [{
-          label: 'ACA/USDT 收盘价 (USD)',
-          data: [],
-          borderColor: '#00ff88',
-          backgroundColor: 'rgba(0,255,136,0.2)',
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 2
-        }]},
+        data: {
+          labels: [],
+          datasets: [{
+            label: '',
+            data: [],
+            borderColor: '#00ff88',
+            backgroundColor: 'rgba(0,255,136,0.2)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          }]
+        },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -86,57 +85,45 @@
             y: { ticks: { color: '#aaa' } }
           },
           plugins: {
-            legend: { labels: { color: '#fff' } },
-            zoom: {
-              zoom: {
-                pinch: { enabled: true },
-                drag: { enabled: false },
-                mode: 'x'
-              },
-              pan: {
-                enabled: true,
-                mode: 'x'
-              }
-            }
+            legend: { labels: { color: '#fff' } }
           }
         }
       });
     }
 
-    async function fetchACAData(bar = '1m') {
+    async function fetchData(coin) {
       try {
-        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=${bar}&limit=100`);
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=1m&limit=60`);
         const json = await res.json();
         const raw = json.data.reverse();
 
-        const labels = raw.map(d => new Date(+d[0]).toLocaleString());
+        const labels = raw.map(d => new Date(+d[0]).toLocaleTimeString());
         const prices = raw.map(d => parseFloat(d[4]));
 
-        acaChart.data.labels = labels;
-        acaChart.data.datasets[0].data = prices;
-        acaChart.update();
+        coinChart.data.labels = labels;
+        coinChart.data.datasets[0].label = `${coin}/USDT 收盘价 (USD)`;
+        coinChart.data.datasets[0].data = prices;
+        coinChart.update();
 
         document.getElementById('updateTime').innerText =
           '更新时间：' + new Date().toLocaleTimeString();
-      } catch (err) {
-        console.error(err);
+      } catch (e) {
+        console.error(e);
         document.getElementById('updateTime').innerText = '数据获取失败';
       }
     }
 
-    // 按钮事件
-    document.querySelectorAll('button[data-bar]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('button[data-bar]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentBar = btn.dataset.bar;
-        fetchACAData(currentBar);
-      });
-    });
+    function updateChart() {
+      const coin = document.getElementById('coinInput').value.trim().toUpperCase() || 'ACA';
+      fetchData(coin);
+    }
 
     initChart();
-    fetchACAData(currentBar);
-    setInterval(() => fetchACAData(currentBar), 15000); // 每15秒刷新一次
+    updateChart(); // 默认加载 ACA
+    setInterval(() => {
+      const coin = document.getElementById('coinInput').value.trim().toUpperCase() || 'ACA';
+      fetchData(coin);
+    }, 10000);
   </script>
 </body>
 </html>
