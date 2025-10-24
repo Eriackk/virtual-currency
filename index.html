@@ -18,6 +18,23 @@
       color: #00ff88;
       margin: 20px 0 10px;
     }
+    .controls {
+      margin: 10px 0;
+    }
+    input, button {
+      background: #1a1c2c;
+      color: #00ff88;
+      border: 1px solid #00ff88;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 1em;
+      margin: 4px;
+    }
+    button:hover {
+      background: #00ff88;
+      color: #0f111a;
+      cursor: pointer;
+    }
     .chart-container {
       position: relative;
       width: 90vw;
@@ -29,28 +46,21 @@
       font-size: 0.9em;
       margin-bottom: 10px;
     }
-    input, button {
-      background: #1a1c2c;
-      color: #00ff88;
-      border: 1px solid #00ff88;
-      border-radius: 4px;
-      padding: 6px 10px;
-      font-size: 1em;
-      margin: 5px;
-    }
-    button:hover {
-      background: #00ff88;
-      color: #0f111a;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
   <h1>虚拟币历史价格走势</h1>
 
-  <div>
+  <div class="controls">
     <input id="coinInput" type="text" placeholder="输入币种，如 ACA 或 BTC" />
     <button onclick="updateChart()">更新图表</button>
+  </div>
+
+  <div class="controls">
+    <button onclick="setBar('1m')">1分钟线</button>
+    <button onclick="setBar('1H')">1小时线</button>
+    <button onclick="setBar('1D')">日线</button>
+    <button onclick="setBar('1W')">周线</button>
   </div>
 
   <div class="time" id="updateTime">加载中...</div>
@@ -61,6 +71,8 @@
   <script>
     const ctx = document.getElementById('coinChart').getContext('2d');
     let coinChart;
+    let currentBar = '1m'; // 默认周期
+    let currentCoin = 'ACA'; // 默认币种
 
     function initChart() {
       coinChart = new Chart(ctx, {
@@ -91,17 +103,17 @@
       });
     }
 
-    async function fetchData(coin) {
+    async function fetchData(coin, bar) {
       try {
-        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=1m&limit=60`);
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=60`);
         const json = await res.json();
         const raw = json.data.reverse();
 
-        const labels = raw.map(d => new Date(+d[0]).toLocaleTimeString());
+        const labels = raw.map(d => new Date(+d[0]).toLocaleString());
         const prices = raw.map(d => parseFloat(d[4]));
 
         coinChart.data.labels = labels;
-        coinChart.data.datasets[0].label = `${coin}/USDT 收盘价 (USD)`;
+        coinChart.data.datasets[0].label = `${coin}/USDT (${bar}) 收盘价 (USD)`;
         coinChart.data.datasets[0].data = prices;
         coinChart.update();
 
@@ -115,15 +127,18 @@
 
     function updateChart() {
       const coin = document.getElementById('coinInput').value.trim().toUpperCase() || 'ACA';
-      fetchData(coin);
+      currentCoin = coin;
+      fetchData(currentCoin, currentBar);
+    }
+
+    function setBar(bar) {
+      currentBar = bar;
+      fetchData(currentCoin, currentBar);
     }
 
     initChart();
-    updateChart(); // 默认加载 ACA
-    setInterval(() => {
-      const coin = document.getElementById('coinInput').value.trim().toUpperCase() || 'ACA';
-      fetchData(coin);
-    }, 10000);
+    updateChart(); // 默认加载 ACA 1分钟线
+    setInterval(() => fetchData(currentCoin, currentBar), 10000); // 每10秒刷新
   </script>
 </body>
 </html>
