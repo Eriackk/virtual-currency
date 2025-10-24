@@ -45,20 +45,31 @@
       width: 90vw;
       height: 70vh;
       margin: auto;
-      touch-action: none; /* 关键：允许Chart.js接管触控缩放与拖动 */
+      touch-action: none;
     }
   </style>
 </head>
 <body>
   <h1>ACA / USDT 实时价格走势</h1>
   <div class="time" id="updateTime">加载中...</div>
+
+  <!-- 周期选择 -->
   <div class="buttons">
     <button data-bar="1m" class="active">1分钟</button>
     <button data-bar="1H">1小时</button>
     <button data-bar="1D">1天</button>
     <button data-bar="1W">1周</button>
-    <button id="resetZoomBtn">重置缩放</button>
   </div>
+
+  <!-- 缩放控制 -->
+  <div class="buttons">
+    <button id="zoomIn">＋ 放大</button>
+    <button id="zoomOut">－ 缩小</button>
+    <button id="panLeft">← 左移</button>
+    <button id="panRight">→ 右移</button>
+    <button id="resetZoom">重置</button>
+  </div>
+
   <div class="chart-container">
     <canvas id="acaChart"></canvas>
   </div>
@@ -67,6 +78,8 @@
     const ctx = document.getElementById('acaChart').getContext('2d');
     let acaChart;
     let currentBar = '1m';
+
+    Chart.register(window['chartjs-plugin-zoom']);
 
     function initChart() {
       acaChart = new Chart(ctx, {
@@ -94,12 +107,12 @@
             legend: { labels: { color: '#fff' } },
             zoom: {
               zoom: {
-                wheel: { enabled: false }, // 禁止滚轮缩放
-                pinch: { enabled: true },  // 启用双指缩放
+                wheel: { enabled: false },
+                pinch: { enabled: false },
                 mode: 'x'
               },
               pan: {
-                enabled: true,
+                enabled: false,
                 mode: 'x'
               }
             }
@@ -139,10 +152,12 @@
       });
     });
 
-    // 重置缩放
-    document.getElementById('resetZoomBtn').addEventListener('click', () => {
-      acaChart.resetZoom();
-    });
+    // 缩放和平移控制
+    document.getElementById('zoomIn').addEventListener('click', () => acaChart.zoom(1.2));
+    document.getElementById('zoomOut').addEventListener('click', () => acaChart.zoom(0.8));
+    document.getElementById('panLeft').addEventListener('click', () => acaChart.pan({x: -100}, undefined, 'default'));
+    document.getElementById('panRight').addEventListener('click', () => acaChart.pan({x: 100}, undefined, 'default'));
+    document.getElementById('resetZoom').addEventListener('click', () => acaChart.resetZoom());
 
     initChart();
     fetchACAData(currentBar);
