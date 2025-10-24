@@ -11,26 +11,31 @@
       color: #fff;
       text-align: center;
       font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
     }
-    canvas {
-      max-width: 800px;
-      margin-top: 50px;
+    .chart-container {
+      position: relative;
+      width: 90vw;
+      height: 70vh;
+      margin: 40px auto;
     }
   </style>
 </head>
 <body>
   <h2>随机虚拟币价格走势</h2>
-  <canvas id="priceChart"></canvas>
+  <div class="chart-container">
+    <canvas id="priceChart"></canvas>
+  </div>
 
   <script>
     const ctx = document.getElementById('priceChart').getContext('2d');
 
-    // 生成随机数据
     function randomData() {
       const data = [];
       let value = 100;
       for (let i = 0; i < 20; i++) {
-        value += (Math.random() - 0.5) * 10; // 上下波动
+        value += (Math.random() - 0.5) * 10;
         data.push(value.toFixed(2));
       }
       return data;
@@ -53,13 +58,11 @@
       type: 'line',
       data: data,
       options: {
+        responsive: true,
+        maintainAspectRatio: false, // 关键：允许自适应高度
         scales: {
-          x: {
-            ticks: { color: '#aaa' }
-          },
-          y: {
-            ticks: { color: '#aaa' }
-          }
+          x: { ticks: { color: '#aaa' } },
+          y: { ticks: { color: '#aaa' } }
         },
         plugins: {
           legend: { labels: { color: '#fff' } }
