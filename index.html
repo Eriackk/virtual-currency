@@ -3,48 +3,125 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACA 实时价格监控</title>
+<title>ACA 实时价格与历史图表</title>
+
+<!-- 引入 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
 body {
   font-family: Arial, sans-serif;
   background: #0f111a;
   color: white;
   text-align: center;
-  margin-top: 100px;
+  margin: 0;
+  padding: 0;
 }
 h1 {
   color: #00ff88;
-  margin-bottom: 10px;
+  margin-top: 60px;
 }
 .price {
-  font-size: 2em;
+  font-size: 2.5em;
   font-weight: bold;
+  margin-top: 10px;
 }
 .time {
   color: #aaa;
-  margin-top: 10px;
+  margin-top: 8px;
+}
+canvas {
+  margin-top: 40px;
+  max-width: 90%;
 }
 </style>
 </head>
+
 <body>
   <h1>ACA / USDT 实时价格</h1>
   <div id="price" class="price">加载中...</div>
   <div id="time" class="time"></div>
 
+  <canvas id="priceChart" width="600" height="300"></canvas>
+
 <script>
+let lastPrice = null;
+
+// === 实时价格刷新 ===
 async function updatePrice() {
   try {
     const res = await fetch('https://www.okx.com/api/v5/market/ticker?instId=ACA-USDT');
     const data = await res.json();
     const price = parseFloat(data.data[0].last).toFixed(6);
-    document.getElementById('price').innerText = price + ' USD';
-    document.getElementById('time').innerText = '更新时间：' + new Date().toLocaleTimeString();
+
+    const priceEl = document.getElementById('price');
+    const timeEl = document.getElementById('time');
+
+    // 红涨绿跌
+    if (lastPrice !== null) {
+      if (price > lastPrice) {
+        priceEl.style.color = '#00ff88'; // 绿色上涨
+      } else if (price < lastPrice) {
+        priceEl.style.color = '#ff4444'; // 红色下跌
+      }
+    }
+
+    priceEl.innerText = price + ' USD';
+    timeEl.innerText = '更新时间：' + new Date().toLocaleTimeString();
+    lastPrice = price;
   } catch (err) {
     document.getElementById('price').innerText = '获取失败';
   }
 }
 updatePrice();
 setInterval(updatePrice, 3000);
+
+// === 绘制历史价格图 ===
+async function drawChart() {
+  try {
+    const res = await fetch('https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=1h');
+    const data = await res.json();
+
+    const candles = data.data.reverse(); // 时间升序排列
+    const times = candles.map(c => new Date(parseInt(c[0])).toLocaleTimeString());
+    const prices = candles.map(c => parseFloat(c[4]));
+
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: times,
+        datasets: [{
+          label: 'ACA/USDT 收盘价（每小时）',
+          data: prices,
+          borderColor: '#00ff88',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#ccc' } }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#aaa', maxRotation: 45, minRotation: 45 }
+          },
+          y: {
+            ticks: { color: '#aaa' },
+            grid: { color: '#333' }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("加载历史数据失败：", err);
+  }
+}
+drawChart();
 </script>
 </body>
 </html>
