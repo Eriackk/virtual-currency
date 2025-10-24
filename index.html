@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACA 历史价格图表</title>
+<title>ACA Chart</title>
 
 <!-- Chart.js 主库 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -67,8 +67,13 @@ canvas {
   <div id="realtimePrice" class="price-box">实时价格加载中...</div>
 
 <script>
+// 注册 K 线图组件（Chart.js v4+ 必须手动注册）
+const { CandlestickController, CandlestickElement, OhlcElement, OhlcController } = Chart;
+Chart.register(CandlestickController, CandlestickElement, OhlcElement, OhlcController);
+
 let chart;
 const ctx = document.getElementById('chartCanvas').getContext('2d');
+
 
 // 初始化图表
 function createChart(data) {
