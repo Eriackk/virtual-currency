@@ -1,152 +1,73 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACA Chart</title>
-
-<!-- Chart.js 主库 -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@3.3.0/dist/chartjs-chart-financial.min.js"></script>
-
-
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background-color: #0f111a;
-  color: #f2f2f2;
-  text-align: center;
-  margin: 0;
-  padding: 0;
-}
-h1 {
-  color: #00ff88;
-  margin-top: 30px;
-}
-.buttons {
-  margin-top: 10px;
-}
-button {
-  background: #222;
-  color: #f2f2f2;
-  border: 1px solid #555;
-  padding: 8px 14px;
-  margin: 0 5px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: 0.2s;
-}
-button:hover {
-  background: #00ff88;
-  color: #000;
-}
-canvas {
-  max-width: 95%;
-  margin: 30px auto;
-  display: block;
-}
-.price-box {
-  font-size: 0.9em;
-  color: #ccc;
-  margin-bottom: 25px;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Currency Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #111;
+      color: #fff;
+      text-align: center;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      max-width: 800px;
+      margin-top: 50px;
+    }
+  </style>
 </head>
-
 <body>
-  <h1>ACA / USDT Historical price chart</h1>
+  <h2>随机虚拟币价格走势</h2>
+  <canvas id="priceChart"></canvas>
 
-  <div class="buttons">
-    <button onclick="loadData('1h')">1小时</button>
-    <button onclick="loadData('1D')">1天</button>
-    <button onclick="loadData('4h')">1月</button>
-  </div>
+  <script>
+    const ctx = document.getElementById('priceChart').getContext('2d');
 
-  <canvas id="chartCanvas" width="800" height="400"></canvas>
-
-  <div id="realtimePrice" class="price-box">Loading...</div>
-
-<script>
-// 注册 K 线图组件（Chart.js v4+ 必须手动注册）
-const { CandlestickController, CandlestickElement, OhlcElement, OhlcController } = Chart;
-Chart.register(CandlestickController, CandlestickElement, OhlcElement, OhlcController);
-
-let chart;
-const ctx = document.getElementById('chartCanvas').getContext('2d');
-
-
-// 初始化图表
-function createChart(data) {
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
-    type: 'candlestick',
-    data: { datasets: [{ label: 'ACA/USDT', data: data,
-      borderColor: '#aaa',
-      color: {
-        up: '#00ff88',    // 上涨蜡烛
-        down: '#ff4444',  // 下跌蜡烛
-        unchanged: '#999'
+    // 生成随机数据
+    function randomData() {
+      const data = [];
+      let value = 100;
+      for (let i = 0; i < 20; i++) {
+        value += (Math.random() - 0.5) * 10; // 上下波动
+        data.push(value.toFixed(2));
       }
-    }]},
-    options: {
-      plugins: {
-        legend: { labels: { color: '#ccc' } }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#ccc' },
-          grid: { color: '#222' }
+      return data;
+    }
+
+    const labels = Array.from({ length: 20 }, (_, i) => `T${i + 1}`);
+    const data = {
+      labels: labels,
+      datasets: [{
+        label: 'Random Coin Price (USD)',
+        data: randomData(),
+        borderColor: '#4caf50',
+        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+        borderWidth: 2,
+        tension: 0.3
+      }]
+    };
+
+    const config = {
+      type: 'line',
+      data: data,
+      options: {
+        scales: {
+          x: {
+            ticks: { color: '#aaa' }
+          },
+          y: {
+            ticks: { color: '#aaa' }
+          }
         },
-        y: {
-          ticks: { color: '#ccc' },
-          grid: { color: '#222' }
+        plugins: {
+          legend: { labels: { color: '#fff' } }
         }
       }
-    }
-  });
-}
+    };
 
-// 加载历史数据
-async function loadData(period) {
-  const map = { "1h": "1h", "1D": "1D", "4h": "4h" };
-  const bar = map[period];
-  const url = `https://www.okx.com/api/v5/market/candles?instId=ACA-USDT&bar=${bar}&limit=100`;
-  const res = await fetch(url);
-  const json = await res.json();
-  const arr = json.data.reverse();
-
-  // 转换成 Chart.js 需要的格式
-  const data = arr.map(d => ({
-    x: new Date(parseInt(d[0])),
-    o: parseFloat(d[1]),
-    h: parseFloat(d[2]),
-    l: parseFloat(d[3]),
-    c: parseFloat(d[4])
-  }));
-
-  createChart(data);
-}
-loadData('1h'); // 默认加载1小时图
-
-// === 实时价格刷新 ===
-let lastPrice = null;
-async function updatePrice() {
-  try {
-    const res = await fetch('https://www.okx.com/api/v5/market/ticker?instId=ACA-USDT');
-    const data = await res.json();
-    const price = parseFloat(data.data[0].last).toFixed(6);
-    const el = document.getElementById('realtimePrice');
-    if (lastPrice !== null) {
-      el.style.color = price > lastPrice ? '#00ff88' : price < lastPrice ? '#ff4444' : '#ccc';
-    }
-    el.innerText = `实时价格：${price} USD （${new Date().toLocaleTimeString()}）`;
-    lastPrice = price;
-  } catch {
-    document.getElementById('realtimePrice').innerText = '实时价格获取失败';
-  }
-}
-updatePrice();
-setInterval(updatePrice, 3000);
-</script>
+    new Chart(ctx, config);
+  </script>
 </body>
 </html>
