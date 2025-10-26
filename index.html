@@ -13,7 +13,7 @@
   button:hover{background:#00ff88;color:#0f111a;cursor:pointer}
   .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
   .time{color:#aaa;font-size:.9em;margin-left:5vw}
-  /* mind-map animation (short main line + fork) */
+  /* mind-map animation */
   .map-container{position:relative;display:inline-block}
   .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
   .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
@@ -33,7 +33,7 @@
   <h1>Virtual Currency Price Trend</h1>
 
   <div class="controls">
-    <!-- 主线控制 -->
+    <!-- 主线 -->
     <input id="coinInput" type="text" placeholder="Enter main coin (e.g. ACA)"/>
     <button onclick="updatePrimary()">Update Chart</button>
 
@@ -43,10 +43,10 @@
     <button onclick="setBar('1D')">1d</button>
     <button onclick="setBar('1W')">1w</button>
 
-    <!-- 平滑切换 -->
+    <!-- 平滑模式 -->
     <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
 
-    <!-- 思维导图添加/删除 -->
+    <!-- 添加/删除 -->
     <div class="map-container" id="mapContainer">
       <button id="addBtn">Add Coin</button>
       <div class="branch-line"></div>
@@ -61,49 +61,37 @@
   <div class="chart-container"><canvas id="coinChart"></canvas></div>
 
 <script>
-const ctx = document.getElementById('coinChart').getContext('2d');
+const ctx=document.getElementById('coinChart').getContext('2d');
 
 let chart;
-let currentBar = '1D';
-let primarySymbol = 'ACA';          // 主绿色线
-let tracked = [];                   // 所有已添加币
-let lastBatch = [];                 // 上一批 addCoin 币种
-let smoothMode = false;
-let addMode = true;                 // Add ↔ Delete 状态切换
+let currentBar='1D';
+let primarySymbol='ACA';
+let tracked=[];
+let lastBatch=[];
+let smoothMode=false;
+let addMode=true;
 
-const GREEN = '#00ff88';
-const palette = ['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3'];
+const GREEN='#00ff88';
+const palette=['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3'];
 
-// 自适应精度
-function decimalsFor(price){
-  if(price >= 1000) return 2;
-  if(price >= 10) return 2;
-  if(price >= 1) return 3;
-  if(price >= 0.1) return 4;
-  return 5;
-}
-function fmt(price){
-  const d = decimalsFor(price);
-  return price.toFixed(d);
-}
+// 精度自适应
+function decimalsFor(p){if(p>=1000)return 2;if(p>=10)return 2;if(p>=1)return 3;if(p>=0.1)return 4;return 5;}
+function fmt(p){const d=decimalsFor(p);return p.toFixed(d);}
 
-// 初始化图表
+// 初始化Chart
 function initChart(){
-  chart = new Chart(ctx,{
+  chart=new Chart(ctx,{
     type:'line',
     data:{labels:[],datasets:[]},
     options:{
-      responsive:true,
-      maintainAspectRatio:false,
+      responsive:true,maintainAspectRatio:false,
       interaction:{mode:'nearest',intersect:true},
       elements:{line:{tension:0},point:{radius:3}},
       plugins:{
         legend:{labels:{color:'#fff'}},
         tooltip:{
           enabled:true,
-          callbacks:{label:(ctx)=>{
-            const v=ctx.parsed.y;return `${ctx.dataset.label}: ${fmt(v)}`;}
-          }
+          callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}
         }
       },
       scales:{}
@@ -112,28 +100,28 @@ function initChart(){
 }
 initChart();
 
-// 添加/更新y轴
-function ensureAxis(axisId,color,offset){
+// 添加Y轴（固定左侧）
+function ensureAxis(axisId,color,grid){
   chart.options.scales[axisId]={
     type:'linear',
     position:'left',
-    grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:offset===0},
-    ticks:{color:color,callback:(val)=>fmt(Number(val))},
-    offset:true
+    grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
+    ticks:{color:color,callback:(v)=>fmt(Number(v))}
   };
 }
 
-// 拉取K线
+// 获取数据
 async function fetchCandles(symbol,bar,limit=60){
   const url=`https://www.okx.com/api/v5/market/candles?instId=${symbol}-USDT&bar=${bar}&limit=${limit}`;
   const res=await fetch(url);const json=await res.json();
   const raw=(json&&json.data)?json.data.reverse():[];
-  const labels=raw.map(d=>new Date(+d[0]).toLocaleString());
-  const prices=raw.map(d=>parseFloat(d[4]));
-  return {labels,prices};
+  return {
+    labels:raw.map(d=>new Date(+d[0]).toLocaleString()),
+    prices:raw.map(d=>parseFloat(d[4]))
+  };
 }
 
-// 添加或更新线
+// 添加/更新线
 async function addOrUpdate(symbol,color,axisId,grid){
   symbol=symbol.toUpperCase();
   ensureAxis(axisId,color,grid);
@@ -141,19 +129,24 @@ async function addOrUpdate(symbol,color,axisId,grid){
   if(chart.data.labels.length===0)chart.data.labels=labels;
   let ds=chart.data.datasets.find(d=>d.metaSymbol===symbol);
   if(!ds){
-    ds={label:`${symbol}/USDT (${currentBar})`,data:prices,borderColor:color,
-        backgroundColor:'transparent',borderWidth:2,tension:chart.options.elements.line.tension,
-        pointRadius:chart.options.elements.point.radius,yAxisID:axisId,metaSymbol:symbol};
+    ds={
+      label:`${symbol}/USDT (${currentBar})`,
+      data:prices,borderColor:color,
+      backgroundColor:'transparent',borderWidth:2,
+      tension:chart.options.elements.line.tension,
+      pointRadius:chart.options.elements.point.radius,
+      yAxisID:axisId,metaSymbol:symbol
+    };
     chart.data.datasets.push(ds);
     tracked.push(symbol);
   }else{
-    ds.data=prices;ds.label=`${symbol}/USDT (${currentBar})`;ds.yAxisID=axisId;
+    ds.data=prices;ds.label=`${symbol}/USDT (${currentBar})`;
   }
   chart.update();
   document.getElementById('updateTime').innerText='Last updated: '+new Date().toLocaleTimeString();
 }
 
-// 主线更新逻辑：先删除旧绿色主线再绘制新主线
+// 主线更新（删除旧主线再绘制）
 async function updatePrimary(){
   const newSymbol=(document.getElementById('coinInput').value.trim()||'ACA').toUpperCase();
   chart.data.datasets=chart.data.datasets.filter(d=>d.metaSymbol!==primarySymbol);
@@ -166,12 +159,11 @@ async function updatePrimary(){
 async function setBar(bar){
   currentBar=bar;
   chart.data.labels=[];
-  for(const ds of chart.data.datasets){
+  for(const ds of chart.data.datasets)
     await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
-  }
 }
 
-// 平滑模式切换
+// 平滑模式
 function toggleSmooth(){
   smoothMode=!smoothMode;
   chart.options.elements.line.tension=smoothMode?0.5:0;
@@ -184,26 +176,9 @@ function toggleSmooth(){
   chart.update();
 }
 
-// 自动Y轴排序
-function sortAxes(){
-  // 获取每条线的最新价格
-  const priceMap=chart.data.datasets.map(ds=>{
-    const p=ds.data.length?ds.data[ds.data.length-1]:0;
-    return {symbol:ds.metaSymbol,axis:ds.yAxisID,color:ds.borderColor,price:p};
-  });
-  priceMap.sort((a,b)=>a.price-b.price);
-  priceMap.forEach((item,i)=>{
-    const axis=chart.options.scales[item.axis];
-    axis.offset=true;
-    axis.grid.drawOnChartArea=(i===0);
-    axis.ticks.color=item.color;
-  });
-}
-
-// Add/Delete合并逻辑
+// Add/Delete 合并按钮逻辑
 const addBtn=document.getElementById('addBtn');
 const mapContainer=document.getElementById('mapContainer');
-
 addBtn.addEventListener('click',async()=>{
   if(addMode){
     mapContainer.classList.add('active');
@@ -216,20 +191,18 @@ addBtn.addEventListener('click',async()=>{
       const syms=raw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
       lastBatch=[];
       let colorIdx=0;
-      let axisCounter=Object.keys(chart.options.scales).filter(k=>k.startsWith('y')).length;
+      let axisCounter=Object.keys(chart.options.scales).length;
       for(const sym of syms){
         const color=palette[colorIdx%palette.length];
-        const axisId='y'+(axisCounter++);
+        const axisId='y'+axisCounter++;
         await addOrUpdate(sym,color,axisId,false);
         lastBatch.push(sym);
         colorIdx++;
       }
       document.getElementById('newCoin').value='';
-      sortAxes();
     };
     document.getElementById('newCoin').addEventListener('keyup',handler,{once:true});
   }else{
-    // 删除上一批币
     if(lastBatch.length){
       chart.data.datasets=chart.data.datasets.filter(d=>!lastBatch.includes(d.metaSymbol));
       tracked=tracked.filter(s=>!lastBatch.includes(s));
@@ -244,14 +217,12 @@ addBtn.addEventListener('click',async()=>{
 
 // 自动刷新
 async function refreshAll(){
-  for(const ds of chart.data.datasets){
+  for(const ds of chart.data.datasets)
     await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
-  }
-  sortAxes();
 }
 setInterval(refreshAll,10000);
 
-// 启动默认主线
+// 启动
 updatePrimary();
 </script>
 </body>
