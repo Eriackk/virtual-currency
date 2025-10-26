@@ -1,220 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Virtual Currency Tracker</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      background-color: #0f111a;
-      color: #fff;
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-    h1 {
-      color: #00ff88;
-      margin: 20px 0 10px;
-      text-align: left;
-      padding-left: 5vw;
-    }
-    .controls {
-      margin: 5px 5vw;
-      text-align: left;
-    }
-    input, button {
-      background: #1a1c2c;
-      color: #00ff88;
-      border: 1px solid #00ff88;
-      border-radius: 4px;
-      padding: 6px 10px;
-      font-size: 1em;
-      margin: 4px;
-    }
-    button:hover {
-      background: #00ff88;
-      color: #0f111a;
-      cursor: pointer;
-    }
-    .chart-container {
-      position: relative;
-      width: 90vw;
-      height: 70vh;
-      margin: 20px auto;
-    }
-    .time {
-      color: #aaa;
-      font-size: 0.9em;
-      margin-left: 5vw;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Virtual Currency Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body{background:#0f111a;color:#fff;font-family:Arial, sans-serif;margin:0}
+  h1{color:#00ff88;margin:20px 0 10px;text-align:left;padding-left:5vw}
+  .controls{margin:6px 5vw;text-align:left}
+  input,button{background:#1a1c2c;color:#00ff88;border:1px solid #00ff88;border-radius:4px;padding:6px 10px;font-size:1em;margin:4px}
+  button:hover{background:#00ff88;color:#0f111a;cursor:pointer}
+  .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
+  .time{color:#aaa;font-size:.9em;margin-left:5vw}
 
-    /* Map animation area */
-    .map-container {
-      position: relative;
-      display: inline-block;
-    }
-    .branch-line {
-      position: absolute;
-      height: 2px;
-      background: white;
-      top: 50%;
-      left: 100%;
-      width: 0;
-      transition: width 0.6s ease;
-    }
-    .branch-up,
-    .branch-down {
-      position: absolute;
-      width: 2px;
-      height: 0;
-      background: white;
-      transition: height 0.4s ease 0.6s;
-    }
-    .branch-up {
-      top: 50%;
-      left: calc(100% + 150px);
-    }
-    .branch-down {
-      top: 50%;
-      left: calc(100% + 150px);
-    }
-    .input-up,
-    .input-down {
-      position: absolute;
-      left: calc(100% + 160px);
-      width: 140px;
-      opacity: 0;
-      transition: opacity 0.3s ease 1s;
-    }
-    .input-up { top: calc(50% - 50px); }
-    .input-down { top: calc(50% + 30px); }
-    .active .branch-line { width: 150px; }
-    .active .branch-up,
-    .active .branch-down { height: 40px; }
-    .active .branch-up { top: calc(50% - 40px); }
-    .active .branch-down { top: 50%; }
-    .active .input-up,
-    .active .input-down { opacity: 1; }
-  </style>
+  /* mind-map animation */
+  .map-container{position:relative;display:inline-block}
+  .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .6s ease}
+  .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .4s ease .6s}
+  .branch-up{top:50%;left:calc(100% + 150px)}
+  .branch-down{top:50%;left:calc(100% + 150px)}
+  .input-up,.input-down{position:absolute;left:calc(100% + 160px);width:150px;opacity:0;transition:opacity .3s ease 1s}
+  .input-up{top:calc(50% - 50px)}
+  .input-down{top:calc(50% + 30px)}
+  .active .branch-line{width:150px}
+  .active .branch-up,.active .branch-down{height:40px}
+  .active .branch-up{top:calc(50% - 40px)}
+  .active .branch-down{top:50%}
+  .active .input-up,.active .input-down{opacity:1}
+</style>
 </head>
 <body>
   <h1>Virtual Currency Price Trend</h1>
 
   <div class="controls">
-    <input id="coinInput" type="text" placeholder="Enter coin symbol (e.g. BTC)" />
-    <button onclick="updateChart()">Update Chart</button>
+    <input id="coinInput" type="text" placeholder="Enter coin (e.g. ACA or BTC)" />
+    <button onclick="loadPrimary()">Update Chart</button>
     <button onclick="setBar('1m')">1m</button>
     <button onclick="setBar('1H')">1h</button>
     <button onclick="setBar('1D')">1d</button>
     <button onclick="setBar('1W')">1w</button>
+    <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
 
-    <!-- Mind-map style Add Coin -->
+    <!-- Mind-map Add/Delete coin -->
     <div class="map-container" id="mapContainer">
       <button id="addBtn">Add Coin</button>
       <div class="branch-line"></div>
       <div class="branch-up"></div>
       <div class="branch-down"></div>
-      <input class="input-up" type="text" id="newCoin" placeholder="Coin name">
-      <input class="input-down" type="number" id="curveCount" placeholder="Curve count">
+      <input class="input-up" type="text" id="newCoin" placeholder="Coin (e.g. BTC)">
+      <input class="input-down" type="text" id="note" placeholder="(optional)">
     </div>
   </div>
 
   <div class="time" id="updateTime">Loading...</div>
-  <div class="chart-container">
-    <canvas id="coinChart"></canvas>
-  </div>
+  <div class="chart-container"><canvas id="coinChart"></canvas></div>
 
-  <script>
-    const ctx = document.getElementById('coinChart').getContext('2d');
-    let coinChart;
-    let currentBar = '1m';
-    let currentCoin = 'ACA';
+<script>
+const ctx = document.getElementById('coinChart').getContext('2d');
+let chart;
+let currentBar = '1m';
+let trackedCoins = [];     // [{symbol:'ACA', axisId:'y', side:'left'}...]
+let smoothMode = false;    // false: points+straight+tooltips on
+const colorList = ['#00ff88','#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5'];
 
-    function initChart() {
-      coinChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: [], datasets: [] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { ticks: { color: '#aaa' } },
-            y: { ticks: { color: '#aaa' } }
-          },
-          elements: {
-            line: { tension: 0.5 },  // smoother curve
-            point: { radius: 0 }
-          },
-          plugins: { legend: { labels: { color: '#fff' } } }
-        }
-      });
-    }
-
-    async function fetchData(coin, bar) {
-      try {
-        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${coin}-USDT&bar=${bar}&limit=60`);
-        const json = await res.json();
-        const raw = json.data.reverse();
-
-        const labels = raw.map(d => new Date(+d[0]).toLocaleString());
-        const prices = raw.map(d => parseFloat(d[4]));
-
-        const colorList = ['#00ff88', '#ff4c4c', '#4c8cff', '#ffb84c', '#a64dff'];
-        const color = colorList[coinChart.data.datasets.length % colorList.length];
-
-        const existing = coinChart.data.datasets.find(d => d.label.includes(coin));
-        if (existing) {
-          existing.data = prices;
-        } else {
-          coinChart.data.datasets.push({
-            label: `${coin}/USDT (${bar})`,
-            data: prices,
-            borderColor: color,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            tension: 0.5,
-            pointRadius: 0
-          });
-        }
-
-        coinChart.data.labels = labels;
-        coinChart.update();
-        document.getElementById('updateTime').innerText =
-          'Last updated: ' + new Date().toLocaleTimeString();
-      } catch (e) {
-        console.error(e);
-        document.getElementById('updateTime').innerText = 'Data fetch failed';
+function initChart(){
+  chart = new Chart(ctx,{
+    type:'line',
+    data:{ labels:[], datasets:[] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'nearest', intersect:false },
+      scales:{},  // dynamic axes added here
+      elements:{ line:{ tension:0 }, point:{ radius:3 } }, // default: show points, straight line
+      plugins:{
+        legend:{ labels:{ color:'#fff' } },
+        tooltip:{ enabled:true } // will be toggled by smooth mode
       }
     }
+  });
+}
+initChart();
 
-    function updateChart() {
-      const coin = document.getElementById('coinInput').value.trim().toUpperCase() || 'ACA';
-      currentCoin = coin;
-      fetchData(currentCoin, currentBar);
-    }
+// create or get a y-axis id for a coin
+function assignAxis(coinIndex){
+  // axis ids y, y1, y2, ...
+  return coinIndex===0 ? 'y' : ('y'+coinIndex);
+}
+function axisSide(coinIndex){
+  // alternate left/right for readability
+  return (coinIndex % 2 === 0) ? 'left' : 'right';
+}
+function ensureAxis(axisId, side){
+  if(!chart.options.scales[axisId]){
+    chart.options.scales[axisId] = {
+      type:'linear',
+      position: side,
+      ticks:{ color:'#aaa' },
+      grid:{ color:'rgba(255,255,255,0.08)' }
+    };
+  }
+}
 
-    function setBar(bar) {
-      currentBar = bar;
-      fetchData(currentCoin, currentBar);
-    }
+async function fetchCandles(symbol, bar, limit=60){
+  const url = `https://www.okx.com/api/v5/market/candles?instId=${symbol}-USDT&bar=${bar}&limit=${limit}`;
+  const res = await fetch(url);
+  const json = await res.json();
+  if(!json || !json.data) throw new Error('No data');
+  const raw = json.data.reverse();
+  const labels = raw.map(d => new Date(+d[0]).toLocaleString());
+  const prices = raw.map(d => parseFloat(d[4]));
+  const stamps = raw.map(d => +d[0]); // timestamps for alignment if needed
+  return {labels, prices, stamps};
+}
 
-    // Animation logic
-    const mapContainer = document.getElementById('mapContainer');
-    const addBtn = document.getElementById('addBtn');
-    addBtn.addEventListener('click', () => {
-      mapContainer.classList.toggle('active');
+function applySmoothVisual(){
+  // update global visual toggles
+  chart.options.elements.line.tension = smoothMode ? 0.5 : 0;
+  chart.options.elements.point.radius = smoothMode ? 0 : 3;
+  chart.options.plugins.tooltip.enabled = !smoothMode;
+  // per-dataset overrides (keep consistent)
+  chart.data.datasets.forEach(ds=>{
+    ds.tension = chart.options.elements.line.tension;
+    ds.pointRadius = chart.options.elements.point.radius;
+  });
+}
+
+async function addOrUpdateCoin(symbol){
+  symbol = symbol.toUpperCase();
+  // if not tracked, append with new axis
+  let idx = trackedCoins.findIndex(c=>c.symbol===symbol);
+  if(idx === -1){
+    const axisId = assignAxis(trackedCoins.length);
+    const side = axisSide(trackedCoins.length);
+    ensureAxis(axisId, side);
+    trackedCoins.push({symbol, axisId, side});
+    // dataset
+    const color = colorList[chart.data.datasets.length % colorList.length];
+    chart.data.datasets.push({
+      label:`${symbol}/USDT (${currentBar})`,
+      data:[],
+      borderColor:color,
+      backgroundColor:'transparent',
+      borderWidth:2,
+      tension: chart.options.elements.line.tension,
+      pointRadius: chart.options.elements.point.radius,
+      yAxisID: axisId
     });
+  }
+  // fetch & update data
+  const {labels, prices} = await fetchCandles(symbol, currentBar, 60);
+  // if it's the first dataset, set labels baseline
+  if(chart.data.labels.length === 0) chart.data.labels = labels;
+  // update dataset data
+  const ds = chart.data.datasets.find(d=>d.label.startsWith(symbol+'/USDT'));
+  ds.data = prices;
+  ds.label = `${symbol}/USDT (${currentBar})`;
+  chart.update();
+  document.getElementById('updateTime').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
+}
 
-    // Add new coin logic
-    document.getElementById('newCoin').addEventListener('change', () => {
-      const newCoin = document.getElementById('newCoin').value.trim().toUpperCase();
-      if (newCoin) fetchData(newCoin, currentBar);
-    });
+async function refreshAll(){
+  for(const c of trackedCoins){
+    try{
+      const {prices, labels} = await fetchCandles(c.symbol, currentBar, 60);
+      // keep labels from first coin; if none set yet, use this coin's
+      if(chart.data.labels.length === 0) chart.data.labels = labels;
+      const ds = chart.data.datasets.find(d=>d.label.startsWith(c.symbol+'/USDT'));
+      if(ds){ ds.data = prices; ds.label = `${c.symbol}/USDT (${currentBar})`; }
+    }catch(e){ console.error('Refresh error:', c.symbol, e); }
+  }
+  chart.update();
+  document.getElementById('updateTime').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
+}
 
-    initChart();
-    updateChart();
-    setInterval(() => fetchData(currentCoin, currentBar), 10000);
-  </script>
+// primary coin load via input
+async function loadPrimary(){
+  const sym = (document.getElementById('coinInput').value.trim() || 'ACA').toUpperCase();
+  await addOrUpdateCoin(sym);
+}
+
+// timeframe switch
+function setBar(bar){
+  currentBar = bar;
+  // clear labels so first refreshed coin resets the label axis nicely
+  chart.data.labels = [];
+  refreshAll();
+}
+
+// smooth toggle per your rule: hide points + smooth + disable tooltip (toggle back restores)
+function toggleSmooth(){
+  smoothMode = !smoothMode;
+  applySmoothVisual();
+  chart.update();
+}
+
+// mind-map add/delete logic
+const mapContainer = document.getElementById('mapContainer');
+const addBtn = document.getElementById('addBtn');
+let lastAdded = null; // remember last added coin to delete on next click
+
+addBtn.addEventListener('click', async ()=>{
+  // if currently in "Add Coin" state (container closed) -> open to add
+  if(!mapContainer.classList.contains('active') && addBtn.textContent==='Add Coin'){
+    mapContainer.classList.add('active');
+    // wait user input, then add when input loses focus OR press Enter
+    const input = document.getElementById('newCoin');
+    input.focus();
+    const handler = async (e)=>{
+      if(e.type==='keyup' && e.key!=='Enter') return;
+      const sym = (input.value.trim() || '').toUpperCase();
+      if(sym){
+        await addOrUpdateCoin(sym);
+        lastAdded = sym;
+        addBtn.textContent = 'Delete Coin';
+      }
+      input.removeEventListener('blur', handler);
+      input.removeEventListener('keyup', handler);
+    };
+    input.addEventListener('blur', handler);
+    input.addEventListener('keyup', handler);
+  }else{
+    // delete coin branch
+    if(lastAdded){
+      // remove dataset
+      chart.data.datasets = chart.data.datasets.filter(d=>!d.label.startsWith(lastAdded+'/USDT'));
+      // remove from trackedCoins
+      trackedCoins = trackedCoins.filter(c=>c.symbol!==lastAdded);
+      // optionally keep axis (Chart.js tolerates unused axes); or clean up:
+      // find its axisId; we keep axes for simplicity to avoid remapping others
+      chart.update();
+    }
+    lastAdded = null;
+    addBtn.textContent = 'Add Coin';
+    mapContainer.classList.remove('active');
+  }
+});
+
+// boot: add default ACA
+(async ()=>{
+  await addOrUpdateCoin('ACA');
+  setInterval(refreshAll, 10000);
+})();
+</script>
 </body>
 </html>
