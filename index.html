@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Virtual Currency Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -14,18 +14,18 @@
   .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
   .time{color:#aaa;font-size:.9em;margin-left:5vw}
 
-  /* mind-map animation */
+  /* mind-map animation (short main line + fork) */
   .map-container{position:relative;display:inline-block}
-  .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .6s ease}
-  .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .4s ease .6s}
-  .branch-up{top:50%;left:calc(100% + 150px)}
-  .branch-down{top:50%;left:calc(100% + 150px)}
-  .input-up,.input-down{position:absolute;left:calc(100% + 160px);width:150px;opacity:0;transition:opacity .3s ease 1s}
-  .input-up{top:calc(50% - 50px)}
-  .input-down{top:calc(50% + 30px)}
-  .active .branch-line{width:150px}
-  .active .branch-up,.active .branch-down{height:40px}
-  .active .branch-up{top:calc(50% - 40px)}
+  .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
+  .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
+  .branch-up{top:50%;left:calc(100% + 90px)}
+  .branch-down{top:50%;left:calc(100% + 90px)}
+  .input-up,.input-down{position:absolute;left:calc(100% + 100px);width:180px;opacity:0;transition:opacity .25s ease .8s}
+  .input-up{top:calc(50% - 40px)}
+  .input-down{top:calc(50% + 18px)}
+  .active .branch-line{width:90px}
+  .active .branch-up,.active .branch-down{height:30px}
+  .active .branch-up{top:calc(50% - 30px)}
   .active .branch-down{top:50%}
   .active .input-up,.active .input-down{opacity:1}
 </style>
@@ -34,23 +34,29 @@
   <h1>Virtual Currency Price Trend</h1>
 
   <div class="controls">
-    <input id="coinInput" type="text" placeholder="Enter coin (e.g. ACA or BTC)" />
+    <!-- 仅刷新主绿色线 -->
+    <input id="coinInput" type="text" placeholder="Enter main coin (e.g. ACA)"/>
     <button onclick="loadPrimary()">Update Chart</button>
+
+    <!-- 时间周期 -->
     <button onclick="setBar('1m')">1m</button>
     <button onclick="setBar('1H')">1h</button>
     <button onclick="setBar('1D')">1d</button>
     <button onclick="setBar('1W')">1w</button>
+
+    <!-- 点/平滑切换 -->
     <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
 
-    <!-- Mind-map Add/Delete coin -->
+    <!-- 思维导图式添加/删除：支持逗号分隔多个币 -->
     <div class="map-container" id="mapContainer">
       <button id="addBtn">Add Coin</button>
       <div class="branch-line"></div>
       <div class="branch-up"></div>
       <div class="branch-down"></div>
-      <input class="input-up" type="text" id="newCoin" placeholder="Coin (e.g. BTC)">
+      <input class="input-up" type="text" id="newCoin" placeholder="Coins (e.g. BTC, RAY, ETH)">
       <input class="input-down" type="text" id="note" placeholder="(optional)">
     </div>
+    <button id="delBtn" onclick="deleteLast()">Delete Coin</button>
   </div>
 
   <div class="time" id="updateTime">Loading...</div>
@@ -58,190 +64,229 @@
 
 <script>
 const ctx = document.getElementById('coinChart').getContext('2d');
-let chart;
-let currentBar = '1m';
-let trackedCoins = [];     // [{symbol:'ACA', axisId:'y', side:'left'}...]
-let smoothMode = false;    // false: points+straight+tooltips on
-const colorList = ['#00ff88','#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5'];
 
+let chart;
+let currentBar = '1D';
+let primarySymbol = 'ACA';               // 主绿色线
+let tracked = [];                        // 所有已添加币（含主线）
+let lastBatch = [];                      // 最近一次通过 Add Coin 加入的一批币
+let smoothMode = false;
+
+const GREEN = '#00ff88';
+const palette = ['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3'];
+
+// —— 精度自适应：根据价格决定小数位 ——
+function decimalsFor(price){
+  if (price >= 1000) return 2;
+  if (price >= 10)   return 2;
+  if (price >= 1)    return 3;
+  if (price >= 0.1)  return 4;
+  return 5;
+}
+function fmt(price){
+  const d = decimalsFor(price);
+  return price.toFixed(d);
+}
+
+// —— 图表初始化：多轴全部放在左侧，tooltip 仅在靠近线时触发 ——
 function initChart(){
   chart = new Chart(ctx,{
     type:'line',
     data:{ labels:[], datasets:[] },
     options:{
       responsive:true, maintainAspectRatio:false,
-      interaction:{ mode:'nearest', intersect:false },
-      scales:{},  // dynamic axes added here
-      elements:{ line:{ tension:0 }, point:{ radius:3 } }, // default: show points, straight line
+      interaction:{ mode:'nearest', intersect:true }, // 仅在线附近触发
+      elements:{ line:{ tension:0 }, point:{ radius:3 } }, // 默认显示点、直线
       plugins:{
         legend:{ labels:{ color:'#fff' } },
-        tooltip:{ enabled:true } // will be toggled by smooth mode
-      }
+        tooltip:{
+          enabled:true,
+          callbacks:{
+            label:(ctx)=>{
+              const v = ctx.parsed.y;
+              return `${ctx.dataset.label}: ${fmt(v)}`;
+            }
+          }
+        }
+      },
+      scales:{}
     }
   });
 }
 initChart();
 
-// create or get a y-axis id for a coin
-function assignAxis(coinIndex){
-  // axis ids y, y1, y2, ...
-  return coinIndex===0 ? 'y' : ('y'+coinIndex);
-}
-function axisSide(coinIndex){
-  // alternate left/right for readability
-  return (coinIndex % 2 === 0) ? 'left' : 'right';
-}
-function ensureAxis(axisId, side){
+// —— 生成轴ID（全部在左侧），并为该轴设置颜色与刻度 —— 
+function ensureAxis(axisId, color, drawGrid){
   if(!chart.options.scales[axisId]){
     chart.options.scales[axisId] = {
       type:'linear',
-      position: side,
-      ticks:{ color:'#aaa' },
-      grid:{ color:'rgba(255,255,255,0.08)' }
+      position:'left',
+      grid:{ color:'rgba(255,255,255,0.08)', drawOnChartArea: drawGrid },
+      ticks:{
+        color: color,
+        callback:(val)=> fmt(Number(val))
+      }
     };
+  }else{
+    chart.options.scales[axisId].ticks.color = color;
   }
 }
 
+// —— 请求K线 —— 
 async function fetchCandles(symbol, bar, limit=60){
   const url = `https://www.okx.com/api/v5/market/candles?instId=${symbol}-USDT&bar=${bar}&limit=${limit}`;
   const res = await fetch(url);
   const json = await res.json();
-  if(!json || !json.data) throw new Error('No data');
-  const raw = json.data.reverse();
+  const raw = (json && json.data) ? json.data.reverse() : [];
   const labels = raw.map(d => new Date(+d[0]).toLocaleString());
   const prices = raw.map(d => parseFloat(d[4]));
-  const stamps = raw.map(d => +d[0]); // timestamps for alignment if needed
-  return {labels, prices, stamps};
+  return {labels, prices};
 }
 
-function applySmoothVisual(){
-  // update global visual toggles
-  chart.options.elements.line.tension = smoothMode ? 0.5 : 0;
-  chart.options.elements.point.radius = smoothMode ? 0 : 3;
-  chart.options.plugins.tooltip.enabled = !smoothMode;
-  // per-dataset overrides (keep consistent)
-  chart.data.datasets.forEach(ds=>{
-    ds.tension = chart.options.elements.line.tension;
-    ds.pointRadius = chart.options.elements.point.radius;
-  });
-}
-
-async function addOrUpdateCoin(symbol){
+// —— 添加或更新某条线（可指定颜色、轴ID） —— 
+async function addOrUpdate(symbol, color, axisId, drawGrid=false){
   symbol = symbol.toUpperCase();
-  // if not tracked, append with new axis
-  let idx = trackedCoins.findIndex(c=>c.symbol===symbol);
-  if(idx === -1){
-    const axisId = assignAxis(trackedCoins.length);
-    const side = axisSide(trackedCoins.length);
-    ensureAxis(axisId, side);
-    trackedCoins.push({symbol, axisId, side});
-    // dataset
-    const color = colorList[chart.data.datasets.length % colorList.length];
-    chart.data.datasets.push({
-      label:`${symbol}/USDT (${currentBar})`,
-      data:[],
-      borderColor:color,
+
+  // 颜色 & 轴
+  ensureAxis(axisId, color, drawGrid);
+
+  // 拉数据
+  const {labels, prices} = await fetchCandles(symbol, currentBar, 60);
+  if(chart.data.labels.length === 0) chart.data.labels = labels;
+
+  // 是否已存在
+  let ds = chart.data.datasets.find(d => d.metaSymbol === symbol);
+  if(!ds){
+    ds = {
+      label: `${symbol}/USDT (${currentBar})`,
+      data: prices,
+      borderColor: color,
       backgroundColor:'transparent',
       borderWidth:2,
       tension: chart.options.elements.line.tension,
       pointRadius: chart.options.elements.point.radius,
-      yAxisID: axisId
-    });
+      yAxisID: axisId,
+      metaSymbol: symbol
+    };
+    chart.data.datasets.push(ds);
+    tracked.push(symbol);
+  }else{
+    ds.data = prices;
+    ds.label = `${symbol}/USDT (${currentBar})`;
+    ds.yAxisID = axisId;
+    ds.borderColor = color;
   }
-  // fetch & update data
-  const {labels, prices} = await fetchCandles(symbol, currentBar, 60);
-  // if it's the first dataset, set labels baseline
-  if(chart.data.labels.length === 0) chart.data.labels = labels;
-  // update dataset data
-  const ds = chart.data.datasets.find(d=>d.label.startsWith(symbol+'/USDT'));
-  ds.data = prices;
-  ds.label = `${symbol}/USDT (${currentBar})`;
+
+  // 依据当前价格更新当前轴的tick格式（颜色已在ensure里处理）
+  const last = prices.length ? prices[prices.length-1] : 0;
+  const dec = decimalsFor(last);
+  chart.options.scales[axisId].ticks.callback = (val)=> Number(val).toFixed(dec);
+
   chart.update();
   document.getElementById('updateTime').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
 }
 
-async function refreshAll(){
-  for(const c of trackedCoins){
-    try{
-      const {prices, labels} = await fetchCandles(c.symbol, currentBar, 60);
-      // keep labels from first coin; if none set yet, use this coin's
-      if(chart.data.labels.length === 0) chart.data.labels = labels;
-      const ds = chart.data.datasets.find(d=>d.label.startsWith(c.symbol+'/USDT'));
-      if(ds){ ds.data = prices; ds.label = `${c.symbol}/USDT (${currentBar})`; }
-    }catch(e){ console.error('Refresh error:', c.symbol, e); }
-  }
-  chart.update();
-  document.getElementById('updateTime').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
-}
-
-// primary coin load via input
+// —— 主绿色线只在 Update Chart 时刷新 —— 
 async function loadPrimary(){
-  const sym = (document.getElementById('coinInput').value.trim() || 'ACA').toUpperCase();
-  await addOrUpdateCoin(sym);
+  primarySymbol = (document.getElementById('coinInput').value.trim() || 'ACA').toUpperCase();
+  // 主轴永远叫 y0，绘制网格，颜色为绿色
+  await addOrUpdate(primarySymbol, GREEN, 'y0', true);
 }
 
-// timeframe switch
-function setBar(bar){
+// —— 时间周期切换：刷新所有线，但不改变已存在集合 —— 
+async function setBar(bar){
   currentBar = bar;
-  // clear labels so first refreshed coin resets the label axis nicely
   chart.data.labels = [];
-  refreshAll();
+  // 逐个刷新（保持颜色与轴不变）
+  for(const ds of chart.data.datasets){
+    await addOrUpdate(ds.metaSymbol, ds.borderColor, ds.yAxisID, ds.yAxisID==='y0');
+  }
 }
 
-// smooth toggle per your rule: hide points + smooth + disable tooltip (toggle back restores)
+// —— 平滑/点切换（Point Smooth）：隐藏点+平滑+关闭tooltip；再点恢复 —— 
 function toggleSmooth(){
   smoothMode = !smoothMode;
-  applySmoothVisual();
+  chart.options.elements.line.tension = smoothMode ? 0.5 : 0;
+  chart.options.elements.point.radius = smoothMode ? 0 : 3;
+  chart.options.plugins.tooltip.enabled = !smoothMode;
+  chart.data.datasets.forEach(ds=>{
+    ds.tension = chart.options.elements.line.tension;
+    ds.pointRadius = chart.options.elements.point.radius;
+  });
   chart.update();
 }
 
-// mind-map add/delete logic
+// —— Add Coin：输入可为“BTC,RAY,ETH” —— 
 const mapContainer = document.getElementById('mapContainer');
 const addBtn = document.getElementById('addBtn');
-let lastAdded = null; // remember last added coin to delete on next click
-
 addBtn.addEventListener('click', async ()=>{
-  // if currently in "Add Coin" state (container closed) -> open to add
-  if(!mapContainer.classList.contains('active') && addBtn.textContent==='Add Coin'){
-    mapContainer.classList.add('active');
-    // wait user input, then add when input loses focus OR press Enter
-    const input = document.getElementById('newCoin');
-    input.focus();
-    const handler = async (e)=>{
-      if(e.type==='keyup' && e.key!=='Enter') return;
-      const sym = (input.value.trim() || '').toUpperCase();
-      if(sym){
-        await addOrUpdateCoin(sym);
-        lastAdded = sym;
-        addBtn.textContent = 'Delete Coin';
-      }
-      input.removeEventListener('blur', handler);
-      input.removeEventListener('keyup', handler);
-    };
-    input.addEventListener('blur', handler);
-    input.addEventListener('keyup', handler);
+  mapContainer.classList.toggle('active');
+  if(mapContainer.classList.contains('active')){
+    document.getElementById('newCoin').focus();
   }else{
-    // delete coin branch
-    if(lastAdded){
-      // remove dataset
-      chart.data.datasets = chart.data.datasets.filter(d=>!d.label.startsWith(lastAdded+'/USDT'));
-      // remove from trackedCoins
-      trackedCoins = trackedCoins.filter(c=>c.symbol!==lastAdded);
-      // optionally keep axis (Chart.js tolerates unused axes); or clean up:
-      // find its axisId; we keep axes for simplicity to avoid remapping others
-      chart.update();
-    }
-    lastAdded = null;
-    addBtn.textContent = 'Add Coin';
-    mapContainer.classList.remove('active');
+    // 关闭时不操作
   }
 });
 
-// boot: add default ACA
-(async ()=>{
-  await addOrUpdateCoin('ACA');
-  setInterval(refreshAll, 10000);
-})();
+// 实际添加（回车或失焦）
+document.getElementById('newCoin').addEventListener('keyup', async (e)=>{
+  if(e.key!=='Enter') return;
+  await addBatch();
+});
+document.getElementById('newCoin').addEventListener('blur', async ()=>{
+  // 若用户只是点开不输入就离开，不强制添加
+});
+
+async function addBatch(){
+  const raw = document.getElementById('newCoin').value.trim();
+  if(!raw) return;
+  const syms = raw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+
+  lastBatch = []; // 记录本次批量加入的币，供 Delete Coin 使用
+  let colorIdx = 0;
+  // 当前已有的轴数量（y0被主线占用），新轴从 y1 开始
+  let axisCounter = Object.keys(chart.options.scales).filter(k=>k.startsWith('y')).length - 1;
+  if(axisCounter < 0) axisCounter = 0;
+
+  for(const sym of syms){
+    // 若已存在则仅更新，不重复分配颜色/轴
+    const existing = chart.data.datasets.find(d=>d.metaSymbol===sym);
+    if(existing){
+      await addOrUpdate(sym, existing.borderColor, existing.yAxisID, existing.yAxisID==='y0');
+      continue;
+    }
+    const color = palette[colorIdx % palette.length];
+    const axisId = 'y' + (++axisCounter); // y1,y2,... 都在左侧
+    await addOrUpdate(sym, color, axisId, false);
+    lastBatch.push(sym);
+    colorIdx++;
+  }
+  // 收起面板
+  mapContainer.classList.remove('active');
+  document.getElementById('newCoin').value = '';
+}
+
+// —— Delete Coin：删除最近一次 Add Coin 加入的一批 —— 
+function deleteLast(){
+  if(lastBatch.length===0) return;
+  // 从数据集删除
+  chart.data.datasets = chart.data.datasets.filter(d=>!lastBatch.includes(d.metaSymbol));
+  // 从跟踪列表删除
+  tracked = tracked.filter(s=>!lastBatch.includes(s));
+  chart.update();
+  lastBatch = [];
+}
+
+// —— 周期性刷新所有曲线（主线+其他线） —— 
+async function refreshAll(){
+  for(const ds of chart.data.datasets){
+    await addOrUpdate(ds.metaSymbol, ds.borderColor, ds.yAxisID, ds.yAxisID==='y0');
+  }
+}
+setInterval(refreshAll, 10000);
+
+// —— 启动：加载主线（ACA） —— 
+loadPrimary();
 </script>
 </body>
 </html>
