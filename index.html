@@ -9,7 +9,6 @@
     body {
       background-color: #0f111a;
       color: #fff;
-      text-align: center;
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
@@ -17,9 +16,12 @@
     h1 {
       color: #00ff88;
       margin: 20px 0 10px;
+      text-align: left;
+      padding-left: 5vw;
     }
     .controls {
-      margin: 10px 0;
+      margin: 5px 5vw;
+      text-align: left;
     }
     input, button {
       background: #1a1c2c;
@@ -44,8 +46,62 @@
     .time {
       color: #aaa;
       font-size: 0.9em;
-      margin-bottom: 10px;
+      margin-left: 5vw;
     }
+
+    /* 动画区域 */
+    .map-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .branch-line {
+      position: absolute;
+      height: 2px;
+      background: white;
+      top: 50%;
+      left: 100%;
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .branch-up,
+    .branch-down {
+      position: absolute;
+      width: 2px;
+      height: 0;
+      background: white;
+      transition: height 0.4s ease 0.6s;
+    }
+
+    .branch-up {
+      top: 50%;
+      left: calc(100% + 150px);
+    }
+    .branch-down {
+      top: 50%;
+      left: calc(100% + 150px);
+    }
+
+    .input-up,
+    .input-down {
+      position: absolute;
+      left: calc(100% + 160px);
+      width: 120px;
+      opacity: 0;
+      transition: opacity 0.3s ease 1s;
+    }
+
+    .input-up { top: calc(50% - 50px); }
+    .input-down { top: calc(50% + 30px); }
+
+    .active .branch-line { width: 150px; }
+    .active .branch-up,
+    .active .branch-down { height: 40px; }
+    .active .branch-up { top: calc(50% - 40px); }
+    .active .branch-down { top: 50%; }
+    .active .input-up,
+    .active .input-down { opacity: 1; }
   </style>
 </head>
 <body>
@@ -54,13 +110,20 @@
   <div class="controls">
     <input id="coinInput" type="text" placeholder="输入币种，如 ACA 或 BTC" />
     <button onclick="updateChart()">更新图表</button>
-  </div>
-
-  <div class="controls">
     <button onclick="setBar('1m')">1分钟线</button>
     <button onclick="setBar('1H')">1小时线</button>
     <button onclick="setBar('1D')">日线</button>
     <button onclick="setBar('1W')">周线</button>
+
+    <!-- 思维导图添加币种按钮 -->
+    <div class="map-container" id="mapContainer">
+      <button id="addBtn">添加币种</button>
+      <div class="branch-line"></div>
+      <div class="branch-up"></div>
+      <div class="branch-down"></div>
+      <input class="input-up" type="text" placeholder="币种名称">
+      <input class="input-down" type="number" placeholder="曲线数量">
+    </div>
   </div>
 
   <div class="time" id="updateTime">加载中...</div>
@@ -71,24 +134,13 @@
   <script>
     const ctx = document.getElementById('coinChart').getContext('2d');
     let coinChart;
-    let currentBar = '1m'; // 默认周期
-    let currentCoin = 'ACA'; // 默认币种
+    let currentBar = '1m';
+    let currentCoin = 'ACA';
 
     function initChart() {
       coinChart = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: [],
-          datasets: [{
-            label: '',
-            data: [],
-            borderColor: '#00ff88',
-            backgroundColor: 'rgba(0,255,136,0.2)',
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 2
-          }]
-        },
+        data: { labels: [], datasets: [] },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -96,9 +148,7 @@
             x: { ticks: { color: '#aaa' } },
             y: { ticks: { color: '#aaa' } }
           },
-          plugins: {
-            legend: { labels: { color: '#fff' } }
-          }
+          plugins: { legend: { labels: { color: '#fff' } } }
         }
       });
     }
@@ -112,9 +162,25 @@
         const labels = raw.map(d => new Date(+d[0]).toLocaleString());
         const prices = raw.map(d => parseFloat(d[4]));
 
+        const colorList = ['#00ff88', '#ff4c4c', '#4c8cff', '#ffb84c', '#a64dff'];
+        const color = colorList[coinChart.data.datasets.length % colorList.length];
+
+        const existing = coinChart.data.datasets.find(d => d.label.includes(coin));
+        if (existing) {
+          existing.data = prices;
+        } else {
+          coinChart.data.datasets.push({
+            label: `${coin}/USDT (${bar})`,
+            data: prices,
+            borderColor: color,
+            backgroundColor: 'transparent',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 0
+          });
+        }
+
         coinChart.data.labels = labels;
-        coinChart.data.datasets[0].label = `${coin}/USDT (${bar}) 收盘价 (USD)`;
-        coinChart.data.datasets[0].data = prices;
         coinChart.update();
 
         document.getElementById('updateTime').innerText =
@@ -136,9 +202,16 @@
       fetchData(currentCoin, currentBar);
     }
 
+    // 思维导图动画控制
+    const mapContainer = document.getElementById('mapContainer');
+    const addBtn = document.getElementById('addBtn');
+    addBtn.addEventListener('click', () => {
+      mapContainer.classList.toggle('active');
+    });
+
     initChart();
-    updateChart(); // 默认加载 ACA 1分钟线
-    setInterval(() => fetchData(currentCoin, currentBar), 10000); // 每10秒刷新
+    updateChart();
+    setInterval(() => fetchData(currentCoin, currentBar), 10000);
   </script>
 </body>
 </html>
