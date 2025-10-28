@@ -13,7 +13,6 @@
   button:hover{background:#00ff88;color:#0f111a;cursor:pointer}
   .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
   .time{color:#aaa;font-size:.9em;margin-left:5vw}
-  /* mind-map animation (short main line + fork) */
   .map-container{position:relative;display:inline-block}
   .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
   .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
@@ -27,17 +26,17 @@
   .active .branch-up{top:calc(50% - 30px)}
   .active .branch-down{top:50%}
   .active .input-up,.active .confirm-btn{opacity:1}
-  /* hover box */
   .hover-box{
     position:absolute;right:12px;top:12px;
     background:rgba(17,17,26,0.85);
     border:1px solid rgba(255,255,255,0.2);
-    border-radius:8px;padding:10px 12px;min-width:260px
+    border-radius:8px;padding:10px 12px;
+    display:none;flex-direction:column;align-items:flex-start;gap:4px
   }
-  .hover-line{margin:2px 0;font-size:12px;line-height:1.3}
+  .hover-line{font-size:12px;line-height:1.3;white-space:nowrap}
   .muted{color:#aaa}
-  .field-label{color:#00ff88;font-weight:bold;width:65px;display:inline-block}
-  .coin-cell{display:inline-block;width:70px;text-align:right;margin-left:4px}
+  .field-label{color:#00ff88;font-weight:bold;width:75px;display:inline-block}
+  .coin-cell{display:inline-block;width:80px;text-align:right;margin-left:6px}
 </style>
 </head>
 <body>
@@ -50,21 +49,20 @@
     <button onclick="setBar('1D')">1d</button>
     <button onclick="setBar('1W')">1w</button>
     <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
-
     <div class="map-container" id="mapContainer">
       <button id="addBtn">Add Coin</button>
       <div class="branch-line"></div>
       <div class="branch-up"></div>
       <div class="branch-down"></div>
-      <input class="input-up" type="text" id="newCoin" placeholder="Coins (e.g. BTC,RAY,ETH,SOL)">
+      <input class="input-up" type="text" id="newCoin" placeholder="Coins (e.g. BTC,RAY,ETH)">
       <button class="confirm-btn" id="confirmBtn">Confirm</button>
     </div>
   </div>
-  <div class="time" id="updateTime">No data yet</div>
+  <div class="time" id="updateTime">Ready.</div>
   <div class="chart-container">
     <canvas id="coinChart"></canvas>
-    <div id="hoverBox" class="hover-box" style="display:none">
-      <div class="hover-line muted" id="hoverTs">Move mouse over chart…</div>
+    <div id="hoverBox" class="hover-box">
+      <div id="hoverTs" class="hover-line muted"></div>
       <div id="hoverCoins" class="hover-line"></div>
       <div id="hoverRows"></div>
     </div>
@@ -74,8 +72,7 @@ const ctx=document.getElementById('coinChart').getContext('2d');
 let chart;let currentBar='1D';let smoothMode=false;let lastBatch=[];
 const GREEN='#00ff88';
 const palette=['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3','#ff7c43','#43ffd0'];
-function decimalsFor(p){if(p>=1000)return 2;if(p>=10)return 2;if(p>=1)return 3;if(p>=0.1)return 4;return 5;}
-function fmt(p){return p.toFixed(decimalsFor(p));}
+function fmtVal(v){if(v===undefined||isNaN(v))return '–';if(Math.abs(v)<0.001&&v!==0)return v.toExponential(2);return Number(v).toFixed(5);}
 function initChart(){
   chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[]},
     options:{responsive:true,maintainAspectRatio:false,
@@ -85,6 +82,7 @@ function initChart(){
       scales:{}
     }});
   chart.canvas.addEventListener('mousemove',e=>{
+    if(smoothMode)return;
     const active=chart.getElementsAtEventForMode(e,'index',{intersect:false},true);
     renderHover(active);
   });
@@ -93,18 +91,17 @@ function initChart(){
 initChart();
 function ensureAxis(id,color,grid){
   const s=chart.options.scales;
-  if(!s[id]){
-    s[id]={type:'linear',position:'left',
-      grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
-      ticks:{color:color,callback:v=>fmt(Number(v))}};
-  }else s[id].ticks.color=color;
+  if(!s[id])s[id]={type:'linear',position:'left',
+    grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
+    ticks:{color:color,callback:v=>Number(v).toFixed(3)}};
+  else s[id].ticks.color=color;
 }
 function removeAxis(id){if(chart.options.scales[id])delete chart.options.scales[id];}
 async function fetchCandles(sym,bar,limit=60){
   const u=`https://www.okx.com/api/v5/market/candles?instId=${sym}-USDT&bar=${bar}&limit=${limit}`;
   const r=await fetch(u);const j=await r.json();const raw=(j&&j.data)?j.data.reverse():[];
   const labels=raw.map(d=>new Date(+d[0]).toLocaleString());
-  const candles=raw.map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],v:+d[5],qv:+(d[6]||0)}));
+  const candles=raw.map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],qv:+(d[6]||0)}));
   return{labels,candles};
 }
 async function addOrUpdate(sym,color,axis,grid=false){
@@ -120,28 +117,26 @@ async function addOrUpdate(sym,color,axis,grid=false){
     chart.data.datasets.push(ds);
   }else{ds.data=candles.map(x=>x.c);ds.metaCandles=candles;}
   const last=candles.at(-1)?.c||0;
-  chart.options.scales[axis].ticks.callback=v=>Number(v).toFixed(decimalsFor(last));
+  chart.options.scales[axis].ticks.callback=v=>Number(v).toFixed(3);
   chart.update();
   document.getElementById('updateTime').innerText='Last updated: '+new Date().toLocaleTimeString();
 }
 async function loadPrimary(){
-  chart.data.datasets=chart.data.datasets.filter(d=>d.yAxisID!=='y0');
-  removeAxis('y0');
-  const val=(document.getElementById('coinInput').value||'').trim();
-  if(!val){chart.update();return;}
+  chart.data.datasets=chart.data.datasets.filter(d=>d.yAxisID!=='y0');removeAxis('y0');
+  const val=(document.getElementById('coinInput').value||'').trim();if(!val){chart.update();return;}
   if(chart.data.datasets.length===0)chart.data.labels=[];
   await addOrUpdate(val.toUpperCase(),GREEN,'y0',true);
 }
 async function setBar(b){
   currentBar=b;chart.data.labels=[];
-  for(const ds of [...chart.data.datasets])
-    await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+  for(const ds of [...chart.data.datasets])await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
 }
 function toggleSmooth(){
   smoothMode=!smoothMode;
   chart.options.elements.line.tension=smoothMode?0.5:0;
   chart.options.elements.point.radius=smoothMode?0:3;
   chart.data.datasets.forEach(d=>{d.tension=chart.options.elements.line.tension;d.pointRadius=chart.options.elements.point.radius;});
+  if(smoothMode)document.getElementById('hoverBox').style.display='none';
   chart.update();
 }
 const mapContainer=document.getElementById('mapContainer');
@@ -184,10 +179,10 @@ function renderHover(active){
   const box=document.getElementById('hoverBox'),rows=document.getElementById('hoverRows'),
         ts=document.getElementById('hoverTs'),coins=document.getElementById('hoverCoins');
   if(!active||!active.length){box.style.display='none';return;}
-  const idx=active[0].index;const list=[];
-  const symbols=[];const fieldNames=['Open','High','Low','Close','Vol','QVol'];
-  const fieldKeys=['o','h','l','c','v','qv'];
-  let tsText='';const byCoin={};
+  const idx=active[0].index;
+  const fieldNames=['Open','High','Low','Close','QVol (USDT)'];
+  const fieldKeys=['o','h','l','c','qv'];
+  const symbols=[];let tsText='';const byCoin={};
   active.forEach(a=>{
     const ds=chart.data.datasets[a.datasetIndex];
     const c=ds.metaCandles?.[idx];if(!c)return;
@@ -201,13 +196,12 @@ function renderHover(active){
     const key=fieldKeys[i];
     let line=`<span class="field-label">${name}:</span>`;
     symbols.forEach(s=>{
-      const c=byCoin[s.name];
-      const val=c?fmt(c[key]):'–';
+      const c=byCoin[s.name];const val=c?fmtVal(c[key]):'–';
       line+=`<span class="coin-cell" style="color:${s.color}">${val}</span>`;
     });
     return `<div class="hover-line">${line}</div>`;
   }).join('');
-  rows.innerHTML=html;box.style.display='block';
+  rows.innerHTML=html;box.style.display='flex';
 }
 async function refreshAll(){
   for(const ds of [...chart.data.datasets])
