@@ -1,221 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Virtual Currency Price & Volume Chart</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Virtual Currency Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  body {
-    background: #0f111a;
-    color: #00ff88;
-    font-family: Arial, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 0;
+  body{background:#0f111a;color:#fff;font-family:Arial, sans-serif;margin:0}
+  h1{color:#00ff88;margin:20px 0 10px;text-align:left;padding-left:5vw}
+  .controls{margin:6px 5vw;text-align:left}
+  input,button{background:#1a1c2c;color:#00ff88;border:1px solid #00ff88;border-radius:4px;padding:6px 10px;font-size:1em;margin:4px}
+  button:hover{background:#00ff88;color:#0f111a;cursor:pointer}
+  .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
+  .time{color:#aaa;font-size:.9em;margin-left:5vw}
+  .map-container{position:relative;display:inline-block}
+  .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
+  .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
+  .branch-up{top:50%;left:calc(100% + 90px)}
+  .branch-down{top:50%;left:calc(100% + 90px)}
+  .input-up,.confirm-btn{position:absolute;left:calc(100% + 100px);opacity:0;transition:opacity .25s ease .8s}
+  .input-up{top:calc(50% - 40px);width:250px}
+  .confirm-btn{top:calc(50% + 18px)}
+  .active .branch-line{width:90px}
+  .active .branch-up,.active .branch-down{height:30px}
+  .active .branch-up{top:calc(50% - 30px)}
+  .active .branch-down{top:50%}
+  .active .input-up,.active .confirm-btn{opacity:1}
+  .hover-box{
+    position:absolute;right:12px;top:12px;
+    background:rgba(17,17,26,0.85);
+    border:1px solid rgba(255,255,255,0.2);
+    border-radius:8px;padding:12px 16px;
+    display:none;flex-direction:column;align-items:flex-start;gap:6px;
   }
-  h1 { margin: 15px 0; }
-  canvas { display: block; margin: 0 auto; }
-  .hoverBox {
-    position: absolute;
-    background: rgba(0,0,0,0.8);
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 10px;
-    color: white;
-    font-size: 14px;
-    pointer-events: none;
-    display: none;
-    white-space: nowrap;
-  }
+  .hover-line{font-size:14px;line-height:1.4;white-space:nowrap}
+  .muted{color:#aaa}
+  .field-label{color:#00ff88;font-weight:bold;width:90px;display:inline-block}
+  .coin-cell{display:inline-block;width:90px;text-align:right;margin-left:6px}
 </style>
 </head>
 <body>
-
-<h1>Virtual Currency Price Trend</h1>
-<input id="coinInput" placeholder="Enter coin symbols (e.g. BTC, ACA)" style="width:260px;">
-<button id="updateBtn">Update Chart</button>
-<button id="addBtn">Add Coin</button>
-<button id="smoothBtn">Point Smooth</button>
-<p id="updateTime">Ready.</p>
-
-<div style="position:relative; width:95%; margin:auto;">
-  <canvas id="priceChart" height="300"></canvas>
-  <canvas id="volumeChart" height="100"></canvas>
-  <div id="hoverBox" class="hoverBox"></div>
-</div>
-
+  <h1>Virtual Currency Price Trend</h1>
+  <div class="controls">
+    <input id="coinInput" type="text" placeholder="Enter main coin (e.g. ACA)"/>
+    <button onclick="loadPrimary()">Update Chart</button>
+    <button onclick="setBar('1m')">1m</button>
+    <button onclick="setBar('1H')">1h</button>
+    <button onclick="setBar('1D')">1d</button>
+    <button onclick="setBar('1W')">1w</button>
+    <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
+    <div class="map-container" id="mapContainer">
+      <button id="addBtn">Add Coin</button>
+      <div class="branch-line"></div>
+      <div class="branch-up"></div>
+      <div class="branch-down"></div>
+      <input class="input-up" type="text" id="newCoin" placeholder="Coins (e.g. BTC,RAY,ETH)">
+      <button class="confirm-btn" id="confirmBtn">Confirm</button>
+    </div>
+  </div>
+  <div class="time" id="updateTime">Ready.</div>
+  <div class="chart-container">
+    <canvas id="coinChart"></canvas>
+    <div id="hoverBox" class="hover-box">
+      <div id="hoverTs" class="hover-line muted"></div>
+      <div id="hoverCoins" class="hover-line"></div>
+      <div id="hoverRows"></div>
+    </div>
+  </div>
 <script>
-const ctx1 = document.getElementById('priceChart');
-const ctx2 = document.getElementById('volumeChart');
-const hoverBox = document.getElementById('hoverBox');
-let smoothMode = false;
-let datasets = [];
-let volumeDatasets = [];
-let chart1, chart2;
-let currentCoins = [];
-
-function fmtVal(v, isQVol=false) {
-  if (isQVol) return parseFloat(v).toFixed(2);
-  const n = parseFloat(v);
-  if (Math.abs(n) < 0.001 && n !== 0) return n.toExponential(2);
-  return n.toFixed(5);
-}
-
-async function fetchKline(symbol, bar='1D') {
-  const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${symbol}-USDT&bar=${bar}`);
-  const json = await res.json();
-  return json.data.map(d => ({
-    time: new Date(+d[0]),
-    open: d[1], high: d[2], low: d[3], close: d[4], qVol: d[6]
-  })).reverse();
-}
-
-function createCharts() {
-  chart1 = new Chart(ctx1, {
-    type: 'line',
-    data: { labels: [], datasets: [] },
-    options: {
-      interaction: { mode: 'nearest', intersect: false },
-      plugins: { legend: { labels: { color: '#fff' }}, tooltip: { enabled: false } },
-      scales: {
-        x: { ticks: { color: '#aaa' } },
-        y: { ticks: { color: '#aaa' }, grid: { color: '#222' } }
-      },
-      onHover: showHover
-    }
+const ctx=document.getElementById('coinChart').getContext('2d');
+let chart;let currentBar='1D';let smoothMode=false;let lastBatch=[];
+const GREEN='#00ff88';
+const palette=['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3','#ff7c43','#43ffd0'];
+function fmtVal(v,isQVol=false){if(v===undefined||isNaN(v))return '–';if(isQVol)return Number(v).toFixed(2);if(Math.abs(v)<0.001&&v!==0)return v.toExponential(2);return Number(v).toFixed(5);}
+function initChart(){
+  chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[]},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      elements:{line:{tension:0},point:{radius:3}},
+      plugins:{legend:{labels:{color:'#fff'}},tooltip:{enabled:false}},
+      scales:{}
+    }});
+  chart.canvas.addEventListener('mousemove',e=>{
+    if(smoothMode)return;
+    const active=chart.getElementsAtEventForMode(e,'index',{intersect:false},true);
+    renderHover(active);
   });
-  chart2 = new Chart(ctx2, {
-    type: 'bar',
-    data: { labels: [], datasets: [] },
-    options: {
-      scales: {
-        x: { ticks: { display: false } },
-        y: { ticks: { color: '#888' }, grid: { color: '#222' } }
-      },
-      plugins: { legend: { display: false }, tooltip: { enabled: false } }
+  chart.canvas.addEventListener('mouseleave',()=>{document.getElementById('hoverBox').style.display='none';});
+}
+initChart();
+function ensureAxis(id,color,grid){
+  const s=chart.options.scales;
+  if(!s[id])s[id]={type:'linear',position:'left',
+    grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
+    ticks:{color:color,callback:v=>Number(v).toFixed(3)}};
+  else s[id].ticks.color=color;
+}
+function removeAxis(id){if(chart.options.scales[id])delete chart.options.scales[id];}
+async function fetchCandles(sym,bar,limit=60){
+  const u=`https://www.okx.com/api/v5/market/candles?instId=${sym}-USDT&bar=${bar}&limit=${limit}`;
+  const r=await fetch(u);const j=await r.json();const raw=(j&&j.data)?j.data.reverse():[];
+  const labels=raw.map(d=>new Date(+d[0]).toLocaleString());
+  const candles=raw.map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],qv:+(d[6]||0)}));
+  return{labels,candles};
+}
+async function addOrUpdate(sym,color,axis,grid=false){
+  sym=sym.toUpperCase();ensureAxis(axis,color,grid);
+  const {labels,candles}=await fetchCandles(sym,currentBar,60);
+  if(chart.data.labels.length===0)chart.data.labels=labels;
+  let ds=chart.data.datasets.find(d=>d.metaSymbol===sym);
+  if(!ds){
+    ds={label:`${sym}/USDT (${currentBar})`,data:candles.map(x=>x.c),
+      borderColor:color,backgroundColor:'transparent',borderWidth:2,
+      tension:chart.options.elements.line.tension,pointRadius:chart.options.elements.point.radius,
+      yAxisID:axis,metaSymbol:sym,metaCandles:candles};
+    chart.data.datasets.push(ds);
+  }else{ds.data=candles.map(x=>x.c);ds.metaCandles=candles;}
+  chart.update();
+  document.getElementById('updateTime').innerText='Last updated: '+new Date().toLocaleTimeString();
+}
+async function loadPrimary(){
+  chart.data.datasets=chart.data.datasets.filter(d=>d.yAxisID!=='y0');removeAxis('y0');
+  const val=(document.getElementById('coinInput').value||'').trim();if(!val){chart.update();return;}
+  if(chart.data.datasets.length===0)chart.data.labels=[];
+  await addOrUpdate(val.toUpperCase(),GREEN,'y0',true);
+}
+async function setBar(b){
+  currentBar=b;chart.data.labels=[];
+  for(const ds of [...chart.data.datasets])await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+}
+function toggleSmooth(){
+  smoothMode=!smoothMode;
+  chart.options.elements.line.tension=smoothMode?0.5:0;
+  chart.options.elements.point.radius=smoothMode?0:3;
+  chart.data.datasets.forEach(d=>{d.tension=chart.options.elements.line.tension;d.pointRadius=chart.options.elements.point.radius;});
+  if(smoothMode)document.getElementById('hoverBox').style.display='none';
+  chart.update();
+}
+const mapContainer=document.getElementById('mapContainer');
+const addBtn=document.getElementById('addBtn');
+const confirmBtn=document.getElementById('confirmBtn');
+const newCoin=document.getElementById('newCoin');
+addBtn.addEventListener('click',()=>{
+  if(addBtn.textContent==='Add Coin'){mapContainer.classList.add('active');newCoin.focus();}
+  else{
+    if(lastBatch.length){
+      const axes=new Set();
+      chart.data.datasets=chart.data.datasets.filter(d=>{
+        if(lastBatch.includes(d.metaSymbol)){axes.add(d.yAxisID);return false;}
+        return true;
+      });
+      axes.forEach(id=>removeAxis(id));
+      chart.update();lastBatch=[];
     }
+    addBtn.textContent='Add Coin';mapContainer.classList.remove('active');
+  }
+});
+confirmBtn.addEventListener('click',async()=>{
+  const raw=newCoin.value.trim();if(!raw)return;
+  const all=[...new Set(raw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean))];
+  if(!all.length)return;
+  lastBatch=[];
+  let axisCount=Object.keys(chart.options.scales).filter(k=>k.startsWith('y')).length-(chart.options.scales['y0']?1:0);
+  let i=0;if(chart.data.datasets.length===0)chart.data.labels=[];
+  for(const sym of all){
+    const exist=chart.data.datasets.find(d=>d.metaSymbol===sym);
+    if(exist){await addOrUpdate(sym,exist.borderColor,exist.yAxisID,exist.yAxisID==='y0');continue;}
+    const color=palette[i%palette.length];i++;
+    const axis='y'+(axisCount+i);
+    await addOrUpdate(sym,color,axis,false);
+    lastBatch.push(sym);
+  }
+  addBtn.textContent='Delete Coin';
+});
+function renderHover(active){
+  const box=document.getElementById('hoverBox'),rows=document.getElementById('hoverRows'),
+        ts=document.getElementById('hoverTs'),coins=document.getElementById('hoverCoins');
+  if(!active||!active.length){box.style.display='none';return;}
+  const idx=active[0].index;
+  const fieldNames=['Open','High','Low','Close','QVol (USDT)'];
+  const fieldKeys=['o','h','l','c','qv'];
+  const symbols=[];let tsText='';const byCoin={};
+  active.forEach(a=>{
+    const ds=chart.data.datasets[a.datasetIndex];
+    const c=ds.metaCandles?.[idx];if(!c)return;
+    if(!tsText)tsText=new Date(c.ts).toLocaleString();
+    symbols.push({name:ds.metaSymbol,color:ds.borderColor});
+    byCoin[ds.metaSymbol]=c;
   });
-}
-createCharts();
-
-async function updateChart() {
-  const coins = document.getElementById('coinInput').value.trim().toUpperCase();
-  if (!coins) return;
-  const arr = coins.split(',').map(c=>c.trim()).filter(c=>c);
-  if (!arr.length) return;
-  currentCoins = [arr[0]];
-  datasets = []; volumeDatasets = [];
-  chart1.data.datasets = []; chart2.data.datasets = [];
-  for (let coin of arr.slice(0,1)) {
-    const data = await fetchKline(coin);
-    const labels = data.map(d => d.time.toLocaleString());
-    const closes = data.map(d => +d.close);
-    chart1.data.labels = labels;
-    chart1.data.datasets.push({
-      label: `${coin}/USDT`,
-      data: closes,
-      borderColor: '#00ff88',
-      tension: smoothMode ? 0.4 : 0,
-      pointRadius: smoothMode ? 0 : 3
+  ts.textContent='Time: '+tsText;
+  coins.innerHTML='Coins: '+symbols.map(s=>`<span style="color:${s.color};margin-right:8px">${s.name}</span>`).join('');
+  const html=fieldNames.map((name,i)=>{
+    const key=fieldKeys[i];
+    let line=`<span class="field-label">${name}:</span>`;
+    symbols.forEach(s=>{
+      const c=byCoin[s.name];
+      const val=c?fmtVal(c[key],key==='qv'): '–';
+      line+=`<span class="coin-cell" style="color:${s.color}">${val}</span>`;
     });
-    chart2.data.labels = labels;
-    chart2.data.datasets.push({
-      label: `${coin} Vol`,
-      data: data.map(d => +d.qVol),
-      backgroundColor: 'rgba(0,255,136,0.4)'
-    });
-  }
-  chart1.update(); chart2.update();
-  document.getElementById('updateTime').innerText = 'Updated: ' + new Date().toLocaleTimeString();
+    return `<div class="hover-line">${line}</div>`;
+  }).join('');
+  rows.innerHTML=html;box.style.display='flex';
 }
-
-async function addCoin() {
-  const coins = document.getElementById('coinInput').value.trim().toUpperCase();
-  const arr = coins.split(',').map(c=>c.trim()).filter(c=>c && !currentCoins.includes(c));
-  const colors = ['#00ff88','#ff4444','#44aaff','#ffaa00','#bb44ff','#00dddd'];
-  for (let coin of arr) {
-    const data = await fetchKline(coin);
-    if (!chart1.data.labels.length)
-      chart1.data.labels = data.map(d=>d.time.toLocaleString());
-    chart1.data.datasets.push({
-      label: `${coin}/USDT`,
-      data: data.map(d=>+d.close),
-      borderColor: colors[(chart1.data.datasets.length)%colors.length],
-      tension: smoothMode ? 0.4 : 0,
-      pointRadius: smoothMode ? 0 : 3
-    });
-    chart2.data.datasets.push({
-      label: `${coin} Vol`,
-      data: data.map(d=>+d.qVol),
-      backgroundColor: colors[(chart2.data.datasets.length)%colors.length]+'66'
-    });
-    currentCoins.push(coin);
-  }
-  chart1.update(); chart2.update();
-  document.getElementById('updateTime').innerText = 'Added: ' + new Date().toLocaleTimeString();
-  document.getElementById('addBtn').innerText = 'Delete Coin';
-  document.getElementById('addBtn').onclick = deleteCoin;
+async function refreshAll(){
+  for(const ds of [...chart.data.datasets])
+    await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
 }
-
-function deleteCoin() {
-  chart1.data.datasets = [];
-  chart2.data.datasets = [];
-  currentCoins = [];
-  chart1.update(); chart2.update();
-  document.getElementById('addBtn').innerText = 'Add Coin';
-  document.getElementById('addBtn').onclick = addCoin;
-}
-
-function showHover(evt, chartEl) {
-  if (smoothMode) { hoverBox.style.display = 'none'; return; }
-  const points = chart1.getElementsAtEventForMode(evt, 'nearest', { intersect: false }, true);
-  if (!points.length) { hoverBox.style.display = 'none'; return; }
-  const i = points[0].index;
-  const html = [];
-  const time = chart1.data.labels[i];
-  html.push(`<b>Time:</b> ${time}<br>`);
-  html.push(`<b>Coins:</b> ${chart1.data.datasets.map(ds => `<span style="color:${ds.borderColor}">${ds.label.split('/')[0]}</span>`).join(' ')}`);
-  html.push('<br>');
-  const fields = ['Open','High','Low','Close','QVol (USDT)'];
-  for (let f=0; f<fields.length; f++) {
-    html.push(`<span style="color:#0f0">${fields[f]}:</span>`);
-    chart1.data.datasets.forEach((ds, idx) => {
-      const coin = ds.label.split('/')[0];
-      const data = chart2.data.datasets[idx].data[i];
-      let val;
-      if (f<4) val = fmtVal(fetchCache[coin][i][f+1]);
-      else val = fmtVal(data, true);
-      html.push(` <span style="color:${ds.borderColor}">${val}</span>`);
-    });
-    html.push('<br>');
-  }
-  hoverBox.innerHTML = html.join('');
-  hoverBox.style.left = evt.chart.canvas.offsetLeft + evt.x + 20 + 'px';
-  hoverBox.style.top = evt.chart.canvas.offsetTop + evt.y - 20 + 'px';
-  hoverBox.style.display = 'block';
-}
-
-let fetchCache = {};
-
-async function preload() {
-  const coins = ['BTC','RAY','ACA'];
-  for (let c of coins) {
-    const data = await fetchKline(c);
-    fetchCache[c] = data.map(d => [d.time,d.open,d.high,d.low,d.close,d.qVol]);
-  }
-}
-preload();
-
-document.getElementById('updateBtn').onclick = updateChart;
-document.getElementById('addBtn').onclick = addCoin;
-document.getElementById('smoothBtn').onclick = () => {
-  smoothMode = !smoothMode;
-  chart1.data.datasets.forEach(ds => { ds.tension = smoothMode ? 0.4 : 0; ds.pointRadius = smoothMode ? 0 : 3; });
-  chart1.update();
-  hoverBox.style.display = smoothMode ? 'none' : 'block';
-};
+setInterval(refreshAll,10000);
 </script>
-
 </body>
 </html>
