@@ -14,6 +14,7 @@
   .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto}
   .time{color:#aaa;font-size:.9em;margin-left:5vw}
 
+  /* Add / Delete mind-map */
   .map-container{position:relative;display:inline-block}
   .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
   .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
@@ -28,6 +29,7 @@
   .active .branch-down{top:50%}
   .active .input-up,.active .confirm-btn{opacity:1}
 
+  /* Hover box */
   .hover-box{
     position:absolute;right:12px;top:12px;
     background:rgba(17,17,26,0.85);
@@ -79,6 +81,12 @@ const GREEN='#00ff88';
 const palette=['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3','#ff7c43','#43ffd0'];
 
 function fmtVal(v,isQVol=false){if(v===undefined||isNaN(v))return '–';if(isQVol)return Number(v).toFixed(2);if(Math.abs(v)<0.001&&v!==0)return v.toExponential(2);return Number(v).toFixed(5);}
+function hexToRGBA(hex, a=0.3){
+  const h=hex.replace('#',''); const r=parseInt(h.substring(0,2),16);
+  const g=parseInt(h.substring(2,4),16); const b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
 function initChart(){
   chart=new Chart(ctx,{
     type:'line',
@@ -87,82 +95,149 @@ function initChart(){
       responsive:true,maintainAspectRatio:false,
       interaction:{mode:'index',intersect:false},
       elements:{line:{tension:0},point:{radius:3}},
-      plugins:{legend:{labels:{color:'#fff'}},tooltip:{enabled:false}},
-      scales:{
-        yVol:{type:'linear',position:'right',
-          grid:{drawOnChartArea:false},
-          ticks:{color:'#aaa',callback:(v)=>v>1e6?(v/1e6).toFixed(1)+'M':v>1e3?(v/1e3).toFixed(1)+'K':v}
-        }
-      }
+      plugins:{
+        legend:{
+          labels:{
+            color:'#fff',
+            // 只显示“线”的图例，隐藏成交量柱的图例
+            filter:(item, data)=> data.datasets[item.datasetIndex].type==='line'
+          }
+        },
+        tooltip:{enabled:false}
+      },
+      scales:{}
     }
   });
   chart.canvas.addEventListener('mousemove',e=>{
-    if(smoothMode)return;
+    if(smoothMode) return;
     const active=chart.getElementsAtEventForMode(e,'index',{intersect:false},true);
     renderHover(active);
+    // hover 高亮：匹配币种的柱体提亮，其它淡化
+    if(active && active.length){
+      const idx = active[0].index;
+      const activeSymbols = new Set(
+        active.map(a=>chart.data.datasets[a.datasetIndex])
+              .filter(ds=>ds.type==='line')
+              .map(ds=>ds.metaSymbol)
+      );
+      chart.data.datasets.forEach(ds=>{
+        if(ds.type==='bar'){
+          const base = ds.metaBaseRGBA || hexToRGBA('#cccccc',0.3);
+          const bright = ds.metaBrightRGBA || hexToRGBA('#cccccc',0.7);
+          ds.backgroundColor = activeSymbols.has(ds.metaSymbol) ? bright : base.replace(/,0\.[0-9]+\)$/,',0.15)');
+        }
+      });
+      chart.update('none');
+    }
   });
-  chart.canvas.addEventListener('mouseleave',()=>{document.getElementById('hoverBox').style.display='none';});
+  chart.canvas.addEventListener('mouseleave',()=>{
+    document.getElementById('hoverBox').style.display='none';
+    // 还原柱体透明度
+    chart.data.datasets.forEach(ds=>{
+      if(ds.type==='bar' && ds.metaBaseRGBA){ ds.backgroundColor = ds.metaBaseRGBA; }
+    });
+    chart.update('none');
+  });
 }
 initChart();
 
 function ensureAxis(id,color,grid){
   const s=chart.options.scales;
-  if(!s[id])s[id]={type:'linear',position:'left',
-    grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
-    ticks:{color:color,callback:v=>Number(v).toFixed(3)}};
-  else s[id].ticks.color=color;
+  if(!s[id]){
+    s[id]={type:'linear',position:'left',
+      grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
+      ticks:{color:color,callback:v=>Number(v).toFixed(3)}};
+  }else{ s[id].ticks.color=color; }
 }
-function removeAxis(id){if(chart.options.scales[id])delete chart.options.scales[id];}
+function ensureVolAxis(id,color){
+  const s=chart.options.scales;
+  if(!s[id]){
+    s[id]={type:'linear',position:'right',
+      grid:{drawOnChartArea:false},
+      ticks:{color:color,callback:(v)=>v>1e9?(v/1e9).toFixed(1)+'B'
+                         :v>1e6?(v/1e6).toFixed(1)+'M'
+                         :v>1e3?(v/1e3).toFixed(1)+'K':v}};
+  }else{ s[id].ticks.color=color; }
+}
+function removeAxis(id){ if(chart.options.scales[id]) delete chart.options.scales[id]; }
 
 async function fetchCandles(sym,bar,limit=60){
   const u=`https://www.okx.com/api/v5/market/candles?instId=${sym}-USDT&bar=${bar}&limit=${limit}`;
-  const r=await fetch(u);const j=await r.json();const raw=(j&&j.data)?j.data.reverse():[];
+  const r=await fetch(u); const j=await r.json(); const raw=(j&&j.data)?j.data.reverse():[];
   const labels=raw.map(d=>new Date(+d[0]).toLocaleString());
   const candles=raw.map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],qv:+(d[6]||0)}));
-  return{labels,candles};
+  return {labels,candles};
 }
 
 async function addOrUpdate(sym,color,axis,grid=false){
-  sym=sym.toUpperCase();ensureAxis(axis,color,grid);
-  const {labels,candles}=await fetchCandles(sym,currentBar,60);
-  if(chart.data.labels.length===0)chart.data.labels=labels;
+  sym=sym.toUpperCase();
+  ensureAxis(axis,color,grid);
+  const volAxis = `yVol_${sym}`;         // 独立成交量轴
+  ensureVolAxis(volAxis,color);
 
-  // 主价格线
-  let ds=chart.data.datasets.find(d=>d.metaSymbol===sym && d.type==='line');
-  if(!ds){
-    ds={type:'line',label:`${sym}/USDT (${currentBar})`,
+  const {labels,candles}=await fetchCandles(sym,currentBar,60);
+  if(chart.data.labels.length===0) chart.data.labels=labels;
+
+  // 价格线
+  let line=chart.data.datasets.find(d=>d.metaSymbol===sym && d.type==='line');
+  if(!line){
+    line={type:'line',label:`${sym}/USDT (${currentBar})`,
       data:candles.map(x=>x.c),
       borderColor:color,backgroundColor:'transparent',
       borderWidth:2,tension:chart.options.elements.line.tension,
       pointRadius:chart.options.elements.point.radius,
+      order:1, // 在线上层
       yAxisID:axis,metaSymbol:sym,metaCandles:candles};
-    chart.data.datasets.push(ds);
-  }else{ds.data=candles.map(x=>x.c);ds.metaCandles=candles;}
+    chart.data.datasets.push(line);
+  }else{
+    line.data=candles.map(x=>x.c);
+    line.metaCandles=candles;
+  }
 
-  // 成交量柱状图
+  // 成交量柱（独立轴、颜色匹配）
   let bar=chart.data.datasets.find(d=>d.metaSymbol===sym && d.type==='bar');
+  const baseRGBA=hexToRGBA(color,0.3);
+  const brightRGBA=hexToRGBA(color,0.7);
   if(!bar){
-    bar={type:'bar',label:`${sym} Volume`,yAxisID:'yVol',
-      backgroundColor:'rgba(200,200,200,0.4)',borderWidth:0,
-      data:candles.map(x=>x.qv),metaSymbol:sym};
-    chart.data.datasets.unshift(bar); // 放在最底层
-  }else{bar.data=candles.map(x=>x.qv);}
+    bar={type:'bar',label:`${sym} Volume`,yAxisID:volAxis,
+      backgroundColor:baseRGBA,borderWidth:0,order:0, // 在底层
+      data:candles.map(x=>x.qv),metaSymbol:sym,metaBaseRGBA:baseRGBA,metaBrightRGBA:brightRGBA,metaVolAxis:volAxis};
+    chart.data.datasets.unshift(bar);
+  }else{
+    bar.data=candles.map(x=>x.qv);
+    bar.metaBaseRGBA=baseRGBA; bar.metaBrightRGBA=brightRGBA; bar.metaVolAxis=volAxis;
+    bar.yAxisID=volAxis; bar.backgroundColor=baseRGBA;
+  }
 
   chart.update();
   document.getElementById('updateTime').innerText='Last updated: '+new Date().toLocaleTimeString();
 }
 
 async function loadPrimary(){
-  chart.data.datasets=chart.data.datasets.filter(d=>d.yAxisID!=='y0');removeAxis('y0');
-  const val=(document.getElementById('coinInput').value||'').trim();if(!val){chart.update();return;}
-  if(chart.data.datasets.length===0)chart.data.labels=[];
+  // 清除旧主线和它的价格轴、成交量轴
+  const axesToRemove=new Set();
+  chart.data.datasets = chart.data.datasets.filter(d=>{
+    if(d.yAxisID==='y0' || (d.type==='bar' && d.metaSymbol && d.metaSymbol===('__PRIMARY__'))) {
+      axesToRemove.add(d.yAxisID);
+      if(d.metaVolAxis) axesToRemove.add(d.metaVolAxis);
+      return false;
+    }
+    return true;
+  });
+  removeAxis('y0');
+  axesToRemove.forEach(a=>removeAxis(a));
+
+  const val=(document.getElementById('coinInput').value||'').trim();
+  if(!val){ chart.update(); return; }
+  if(chart.data.datasets.length===0) chart.data.labels=[];
   await addOrUpdate(val.toUpperCase(),GREEN,'y0',true);
 }
 
 async function setBar(b){
-  currentBar=b;chart.data.labels=[];
-  for(const ds of [...chart.data.datasets.filter(d=>d.type==='line')])
+  currentBar=b; chart.data.labels=[];
+  for(const ds of [...chart.data.datasets.filter(d=>d.type==='line')]){
     await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+  }
 }
 
 function toggleSmooth(){
@@ -170,9 +245,9 @@ function toggleSmooth(){
   chart.options.elements.line.tension=smoothMode?0.5:0;
   chart.options.elements.point.radius=smoothMode?0:3;
   chart.data.datasets.filter(d=>d.type==='line').forEach(d=>{
-    d.tension=chart.options.elements.line.tension;d.pointRadius=chart.options.elements.point.radius;
+    d.tension=chart.options.elements.line.tension; d.pointRadius=chart.options.elements.point.radius;
   });
-  if(smoothMode)document.getElementById('hoverBox').style.display='none';
+  if(smoothMode) document.getElementById('hoverBox').style.display='none';
   chart.update();
 }
 
@@ -182,32 +257,33 @@ const confirmBtn=document.getElementById('confirmBtn');
 const newCoin=document.getElementById('newCoin');
 
 addBtn.addEventListener('click',()=>{
-  if(addBtn.textContent==='Add Coin'){mapContainer.classList.add('active');newCoin.focus();}
+  if(addBtn.textContent==='Add Coin'){ mapContainer.classList.add('active'); newCoin.focus(); }
   else{
     if(lastBatch.length){
       const axes=new Set();
       chart.data.datasets=chart.data.datasets.filter(d=>{
-        if(lastBatch.includes(d.metaSymbol)){axes.add(d.yAxisID);return false;}
-        return true;
+        const hit = lastBatch.includes(d.metaSymbol);
+        if(hit){ axes.add(d.yAxisID); if(d.metaVolAxis) axes.add(d.metaVolAxis); }
+        return !hit;
       });
       axes.forEach(id=>removeAxis(id));
-      chart.update();lastBatch=[];
+      chart.update(); lastBatch=[];
     }
-    addBtn.textContent='Add Coin';mapContainer.classList.remove('active');
+    addBtn.textContent='Add Coin'; mapContainer.classList.remove('active');
   }
 });
 
 confirmBtn.addEventListener('click',async()=>{
-  const raw=newCoin.value.trim();if(!raw)return;
+  const raw=newCoin.value.trim(); if(!raw) return;
   const all=[...new Set(raw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean))];
-  if(!all.length)return;
+  if(!all.length) return;
   lastBatch=[];
-  let axisCount=Object.keys(chart.options.scales).filter(k=>k.startsWith('y')).length-(chart.options.scales['y0']?1:0);
-  let i=0;if(chart.data.datasets.length===0)chart.data.labels=[];
+  let axisCount=Object.keys(chart.options.scales).filter(k=>k.startsWith('y') && k!=='y0').length;
+  let i=0; if(chart.data.datasets.length===0) chart.data.labels=[];
   for(const sym of all){
     const exist=chart.data.datasets.find(d=>d.metaSymbol===sym && d.type==='line');
-    if(exist){await addOrUpdate(sym,exist.borderColor,exist.yAxisID,exist.yAxisID==='y0');continue;}
-    const color=palette[i%palette.length];i++;
+    if(exist){ await addOrUpdate(sym,exist.borderColor,exist.yAxisID,exist.yAxisID==='y0'); continue; }
+    const color=palette[i%palette.length]; i++;
     const axis='y'+(axisCount+i);
     await addOrUpdate(sym,color,axis,false);
     lastBatch.push(sym);
@@ -218,34 +294,38 @@ confirmBtn.addEventListener('click',async()=>{
 function renderHover(active){
   const box=document.getElementById('hoverBox'),rows=document.getElementById('hoverRows'),
         ts=document.getElementById('hoverTs'),coins=document.getElementById('hoverCoins');
-  if(!active||!active.length){box.style.display='none';return;}
+  if(!active||!active.length){ box.style.display='none'; return; }
+
   const idx=active[0].index;
   const fieldNames=['Open','High','Low','Close','QVol (USDT)'];
   const fieldKeys=['o','h','l','c','qv'];
-  const symbols=[];let tsText='';const byCoin={};
+  const symbols=[]; let tsText=''; const byCoin={};
+
   chart.data.datasets.filter(d=>d.type==='line').forEach(ds=>{
-    const c=ds.metaCandles?.[idx];if(!c)return;
-    if(!tsText)tsText=new Date(c.ts).toLocaleString();
+    const c=ds.metaCandles?.[idx]; if(!c) return;
+    if(!tsText) tsText=new Date(c.ts).toLocaleString();
     symbols.push({name:ds.metaSymbol,color:ds.borderColor});
     byCoin[ds.metaSymbol]=c;
   });
+
   ts.textContent='Time: '+tsText;
   coins.innerHTML='Coins: '+symbols.map(s=>`<span style="color:${s.color};margin-right:8px">${s.name}</span>`).join('');
   const html=fieldNames.map((name,i)=>{
     const key=fieldKeys[i];
     let line=`<span class="field-label">${name}:</span>`;
     symbols.forEach(s=>{
-      const c=byCoin[s.name];const val=c?fmtVal(c[key],key==='qv'):'–';
+      const c=byCoin[s.name]; const val=c?fmtVal(c[key],key==='qv'):'–';
       line+=`<span class="coin-cell" style="color:${s.color}">${val}</span>`;
     });
     return `<div class="hover-line">${line}</div>`;
   }).join('');
-  rows.innerHTML=html;box.style.display='flex';
+  rows.innerHTML=html; box.style.display='flex';
 }
 
 async function refreshAll(){
-  for(const ds of [...chart.data.datasets.filter(d=>d.type==='line')])
+  for(const ds of [...chart.data.datasets.filter(d=>d.type==='line')]){
     await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+  }
 }
 setInterval(refreshAll,10000);
 </script>
