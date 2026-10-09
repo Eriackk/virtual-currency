@@ -4,574 +4,543 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Virtual Currency Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  body{background:#0f111a;color:#fff;font-family:Arial,sans-serif;margin:0}
+  body{background:#0f111a;color:#fff;font-family:Arial, sans-serif;margin:0}
   h1{color:#00ff88;margin:20px 0 10px;text-align:left;padding-left:5vw}
   .controls{margin:6px 5vw;text-align:left}
   input,button{background:#1a1c2c;color:#00ff88;border:1px solid #00ff88;border-radius:4px;padding:6px 10px;font-size:1em;margin:4px}
   button:hover{background:#00ff88;color:#0f111a;cursor:pointer}
-  .chart-container{position:relative;width:90vw;height:70vh;margin:20px auto;display:flex;flex-direction:column;gap:4px}
-  .price-wrapper{position:relative;flex:2;min-height:0}
-  .macd-wrapper{position:relative;flex:1;min-height:0}
-  .price-wrapper canvas,.macd-wrapper canvas{width:100%!important;height:100%!important}
+  .chart-container{
+    position:relative;
+    width:90vw;
+    height:70vh;
+    margin:20px auto;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .price-wrapper{
+    position:relative;
+    flex:2;
+  }
+  .macd-wrapper{
+    position:relative;
+    flex:1;
+  }
+  .price-wrapper canvas,
+  .macd-wrapper canvas{
+    width:100% !important;
+    height:100% !important;
+  }
   .time{color:#aaa;font-size:.9em;margin-left:5vw}
   .map-container{position:relative;display:inline-block}
   .branch-line{position:absolute;height:2px;background:#fff;top:50%;left:100%;width:0;transition:width .45s ease}
   .branch-up,.branch-down{position:absolute;width:2px;height:0;background:#fff;transition:height .35s ease .45s}
   .branch-up{top:50%;left:calc(100% + 90px)}
   .branch-down{top:50%;left:calc(100% + 90px)}
-  .input-up,.confirm-btn{position:absolute;left:calc(100% + 100px);opacity:0;pointer-events:none;transition:opacity .25s ease .8s}
+  .input-up,.confirm-btn{position:absolute;left:calc(100% + 100px);opacity:0;transition:opacity .25s ease .8s}
   .input-up{top:calc(50% - 40px);width:250px}
   .confirm-btn{top:calc(50% + 18px)}
   .active .branch-line{width:90px}
   .active .branch-up,.active .branch-down{height:30px}
   .active .branch-up{top:calc(50% - 30px)}
   .active .branch-down{top:50%}
-  .active .input-up,.active .confirm-btn{opacity:1;pointer-events:auto}
-  .hover-box{position:absolute;right:12px;top:12px;background:rgba(17,17,26,.85);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:12px 16px;display:none;flex-direction:column;align-items:flex-start;gap:6px;max-width:90%;overflow:auto;pointer-events:none}
+  .active .input-up,.active .confirm-btn{opacity:1}
+  .hover-box{
+    position:absolute;right:12px;top:12px;
+    background:rgba(17,17,26,0.85);
+    border:1px solid rgba(255,255,255,0.2);
+    border-radius:8px;padding:12px 16px;
+    display:none;flex-direction:column;align-items:flex-start;gap:6px;
+  }
   .hover-line{font-size:14px;line-height:1.4;white-space:nowrap}
   .muted{color:#aaa}
-  .field-label{color:#00ff88;font-weight:bold;width:100px;display:inline-block}
-  .coin-cell{display:inline-block;width:120px;text-align:right;margin-left:6px}
+  .field-label{color:#00ff88;font-weight:bold;width:90px;display:inline-block}
+  .coin-cell{display:inline-block;width:90px;text-align:right;margin-left:6px}
 </style>
 </head>
 <body>
-<h1>Virtual Currency Price Trend</h1>
-<div class="controls">
-  <input id="coinInput" type="text"
-         placeholder="Main coin / contract (ACA, fu2611)"/>
-  <button onclick="loadPrimary()">Update Chart</button>
-  <button onclick="setBar('1m')">1m</button>
-  <button onclick="setBar('1H')">1h</button>
-  <button onclick="setBar('1D')">1d</button>
-  <button onclick="setBar('1W')">1w</button>
-  <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
-  <div class="map-container" id="mapContainer">
-    <button id="addBtn">Add Coin</button>
-    <div class="branch-line"></div>
-    <div class="branch-up"></div>
-    <div class="branch-down"></div>
-    <input class="input-up" id="newCoin" type="text"
-           placeholder="BTC,RAY,fu2611,bu2610">
-    <button class="confirm-btn" id="confirmBtn">Confirm</button>
-  </div>
-</div>
-<div class="time" id="updateTime">Ready.</div>
-<div class="chart-container">
-  <div class="price-wrapper">
-    <canvas id="coinChart"></canvas>
-    <div id="hoverBox" class="hover-box">
-      <div id="hoverTs" class="hover-line muted"></div>
-      <div id="hoverCoins" class="hover-line"></div>
-      <div id="hoverRows"></div>
+  <h1>Virtual Currency Price Trend</h1>
+  <div class="controls">
+    <input id="coinInput" type="text" placeholder="Enter main coin (e.g. ACA)"/>
+    <button onclick="loadPrimary()">Update Chart</button>
+    <button onclick="setBar('1m')">1m</button>
+    <button onclick="setBar('1H')">1h</button>
+    <button onclick="setBar('1D')">1d</button>
+    <button onclick="setBar('1W')">1w</button>
+    <button id="smoothBtn" onclick="toggleSmooth()">Point Smooth</button>
+    <div class="map-container" id="mapContainer">
+      <button id="addBtn">Add Coin</button>
+      <div class="branch-line"></div>
+      <div class="branch-up"></div>
+      <div class="branch-down"></div>
+      <input class="input-up" type="text" id="newCoin" placeholder="Coins (e.g. BTC,RAY,ETH)">
+      <button class="confirm-btn" id="confirmBtn">Confirm</button>
     </div>
   </div>
-  <div class="macd-wrapper"><canvas id="macdChart"></canvas></div>
-</div>
+  <div class="time" id="updateTime">Ready.</div>
+  <div class="chart-container">
+    <div class="price-wrapper">
+      <canvas id="coinChart"></canvas>
+      <div id="hoverBox" class="hover-box">
+        <div id="hoverTs" class="hover-line muted"></div>
+        <div id="hoverCoins" class="hover-line"></div>
+        <div id="hoverRows"></div>
+      </div>
+    </div>
+    <div class="macd-wrapper">
+      <canvas id="macdChart"></canvas>
+    </div>
+  </div>
 
 <script>
-// 填写你已有的 China Futures HTTPS 服务地址，不要在这里填写密码。
-// 例如：https://your-futures.example.com
-const CHINA_FUTURES_BASE = '';
+const ctx=document.getElementById('coinChart').getContext('2d');
+const macdCtx=document.getElementById('macdChart').getContext('2d');
+let chart;
+let macdChart;
+let currentBar='1D';
+let smoothMode=false;
+let lastBatch=[];
+let primarySymbol=null;
+let primaryCandles=[];
+const GREEN='#00ff88';
+const DIF_COLOR='#ffd700'; // 金色
+const DEA_COLOR='#ff4c4c'; // 红色
+const palette=['#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff','#ffd24d','#ff6ad5','#7cffd3','#ff7c43','#43ffd0'];
 
-const GREEN = '#00ff88';
-const palette = [
-  '#ff4c4c','#4c8cff','#ffb84c','#a64dff','#4dd2ff',
-  '#ffd24d','#ff6ad5','#7cffd3','#ff7c43','#43ffd0'
-];
-const PERIODS = {
-  '1m':60000, '1H':3600000,
-  '1D':86400000, '1W':604800000
-};
-const PRODUCTS = {
-  SHFE:'au ag cu al zn pb ni sn rb hc ss fu bu ru sp ao br wr',
-  DCE:'a b c cs m y p i j jm jd l v pp eg eb pg rr lh fb bb',
-  CZCE:'WH PM CF SR TA OI MA FG RM ZC SF SM CY AP CJ UR SA PF PK SH PX PR RI LR JR RS',
-  CFFEX:'IF IH IC IM T TF TS TL',
-  INE:'sc nr lu bc ec',
-  GFEX:'si lc ps'
-};
-const catalog = new Map();
-for(const [exchange, codes] of Object.entries(PRODUCTS)){
-  for(const code of codes.split(' ')){
-    catalog.set(code.toLowerCase(), {exchange, code});
-  }
+function fmtVal(v,isQVol=false){
+  if(v===undefined||isNaN(v))return '–';
+  if(isQVol)return Number(v).toFixed(2);
+  if(Math.abs(v)<0.001&&v!==0)return v.toExponential(2);
+  return Number(v).toFixed(5);
+}
+function hexToRGBA(hex,a=0.3){
+  const h=hex.replace('#','');
+  const r=parseInt(h.substring(0,2),16);
+  const g=parseInt(h.substring(2,4),16);
+  const b=parseInt(h.substring(4,6),16);
+  return`rgba(${r},${g},${b},${a})`;
 }
 
-const $ = id => document.getElementById(id);
-let currentBar = '1D';
-let loadedBar = null;
-let smoothMode = false;
-let primarySymbol = null;
-let lastBatch = [];
-let assets = new Map();
-let timestamps = [];
-let generation = 0;
-let busy = false;
-
-function status(message, error=false){
-  $('updateTime').textContent = message;
-  $('updateTime').style.color = error ? '#ff8585' : '#aaa';
-}
-function fmt(value){
-  if(value == null || !Number.isFinite(value)) return '–';
-  if(value !== 0 && Math.abs(value) < .001) return value.toExponential(2);
-  return value.toLocaleString('en-US', {maximumFractionDigits:5});
-}
-function rgba(hex, alpha){
-  const value = parseInt(hex.slice(1),16);
-  return `rgba(${value>>16},${(value>>8)&255},${value&255},${alpha})`;
-}
-
-function parseSymbol(value){
-  const raw = String(value || '').trim();
-  if(!raw) throw new Error('请输入币种或期货代码');
-
-  const match = raw.match(/^(?:([a-z]+)\.)?([a-z]+)(\d{3,4})$/i);
-  if(match){
-    const product = catalog.get(match[2].toLowerCase());
-    if(product || match[1]){
-      if(!product) throw new Error('未知期货品种：'+match[2]);
-      if(match[1] && match[1].toUpperCase() !== product.exchange){
-        throw new Error('交易所与品种不匹配：'+raw);
-      }
-      let month = match[3];
-      const mm = Number(month.slice(-2));
-      if(mm < 1 || mm > 12) throw new Error('合约月份无效：'+raw);
-
-      // 郑商所原生合约使用三位年月，例如 MA610。
-      if(product.exchange === 'CZCE'){
-        month = month.slice(-3);
-      }else if(month.length !== 4){
-        throw new Error('该交易所请使用四位年月，例如 fu2611');
-      }
-      const instrument = product.code + month;
-      const key = product.exchange + '.' + instrument;
-      return {
-        key, label:key, kind:'future',
-        exchange:product.exchange, instrument
-      };
-    }
-  }
-
-  const symbol = raw.toUpperCase().replace(/[-_/]?USDT$/,'');
-  if(!/^[A-Z0-9]{2,24}$/.test(symbol)){
-    throw new Error('无法识别代码：'+raw);
-  }
-  return {
-    key:symbol, label:symbol+'/USDT',
-    kind:'crypto', instrument:symbol+'-USDT'
-  };
-}
-
-async function getJSON(url){
-  const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(),15000);
-  try{
-    const response = await fetch(url,{signal:controller.signal});
-    if(!response.ok) throw new Error('HTTP '+response.status);
-    return await response.json();
-  }catch(error){
-    if(error.name === 'AbortError') throw new Error('行情请求超时');
-    throw error;
-  }finally{
-    clearTimeout(timer);
-  }
-}
-
-async function fetchCandles(asset, bar){
-  let rows;
-  if(asset.kind === 'crypto'){
-    const params = new URLSearchParams({
-      instId:asset.instrument, bar, limit:'100'
-    });
-    const result = await getJSON(
-      'https://www.okx.com/api/v5/market/candles?'+params
-    );
-    if(result.code !== '0'){
-      throw new Error(result.msg || 'OKX 查询失败');
-    }
-    rows = (result.data || []).map(row=>({
-      ts:Number(row[0]),
-      o:Number(row[1]), h:Number(row[2]),
-      l:Number(row[3]), c:Number(row[4]),
-      // OKX 现货报价币成交额为第 8 个字段。
-      qv:row[7] === undefined ? null : Number(row[7])
-    }));
-  }else{
-    const base = CHINA_FUTURES_BASE.trim().replace(/\/+$/,'');
-    if(!base){
-      throw new Error(
-        `${asset.label} 已识别；请先配置 CHINA_FUTURES_BASE 行情地址`
-      );
-    }
-    if(!/^https:\/\//i.test(base)){
-      throw new Error('GitHub Pages 请配置 HTTPS 期货行情地址');
-    }
-
-    // 现有接口最大支持日线间隔；周线用日线汇总。
-    const params = new URLSearchParams({
-      exchange:asset.exchange,
-      inst_id:asset.instrument,
-      interval_ms:String(bar === '1W' ? PERIODS['1D'] : PERIODS[bar]),
-      limit:bar === '1W' ? '1000' : '100'
-    });
-    const result = await getJSON(base+'/api/data_kmap?'+params);
-    if(!result.ok) throw new Error(result.error || '期货行情查询失败');
-
-    rows = (result.data || []).map(row=>({
-      ts:Number(row.ts),
-      o:Number(row.open), h:Number(row.high),
-      l:Number(row.low), c:Number(row.close),
-      qv:row.quote_volume == null ? null : Number(row.quote_volume)
-    }));
-  }
-
-  rows = rows.filter(row=>
-    [row.ts,row.o,row.h,row.l,row.c].every(Number.isFinite)
-  ).sort((a,b)=>a.ts-b.ts);
-  rows = [...new Map(rows.map(row=>[row.ts,row])).values()];
-
-  if(asset.kind === 'future' && bar === '1W'){
-    const weekly = new Map();
-    const day = 86400000;
-    for(const row of rows){
-      const local = new Date(row.ts + 8*3600000);
-      const weekday = (local.getUTCDay()+6)%7;
-      const start = Date.UTC(
-        local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()
-      ) - weekday*day - 8*3600000;
-      const previous = weekly.get(start);
-      if(!previous){
-        weekly.set(start,{...row,ts:start});
-      }else{
-        previous.h = Math.max(previous.h,row.h);
-        previous.l = Math.min(previous.l,row.l);
-        previous.c = row.c;
-        previous.qv = previous.qv == null || row.qv == null
-          ? null : previous.qv + row.qv;
+function initChart(){
+  chart=new Chart(ctx,{
+    type:'line',
+    data:{labels:[],datasets:[]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      elements:{line:{tension:0},point:{radius:3}},
+      plugins:{
+        legend:{
+          labels:{
+            color:'#fff',
+            filter:(item,data)=>data.datasets[item.datasetIndex].type==='line'
+          }
+        },
+        tooltip:{enabled:false}
+      },
+      scales:{
+        x:{display:false,ticks:{color:'#fff'} }
       }
     }
-    rows = [...weekly.values()];
-  }
+  });
 
-  if(!rows.length) throw new Error(asset.label+' 暂无行情数据');
-  return rows.slice(-60);
-}
-
-const chart = new Chart($('coinChart'),{
-  type:'line',
-  data:{labels:[],datasets:[]},
-  options:{
-    responsive:true, maintainAspectRatio:false,
-    interaction:{mode:'index',intersect:false},
-    plugins:{
-      legend:{
-        labels:{
-          color:'#fff',
-          filter:(item,data)=>data.datasets[item.datasetIndex].type==='line'
+  macdChart=new Chart(macdCtx,{
+    type:'line',
+    data:{labels:[],datasets:[]},
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      elements:{line:{tension:0,pointRadius:0}},
+      plugins:{
+        legend:{labels:{color:'#fff'}},
+        tooltip:{enabled:false}
+      },
+      scales:{
+        x:{
+          display:true,
+          ticks:{
+            color:'#aaa',
+            maxRotation:60,
+            minRotation:45
+          },
+          grid:{display:false}
+        },
+        y:{
+          position:'left',
+          ticks:{color:'#fff'},
+          grid:{color:'rgba(255,255,255,0.08)'}
         }
-      },
-      tooltip:{enabled:false}
-    },
-    scales:{x:{display:false}}
-  }
-});
-const macdChart = new Chart($('macdChart'),{
-  type:'line',
-  data:{labels:[],datasets:[]},
-  options:{
-    responsive:true, maintainAspectRatio:false,
-    interaction:{mode:'index',intersect:false},
-    plugins:{
-      legend:{labels:{color:'#fff'}},
-      tooltip:{enabled:false}
-    },
-    scales:{
-      x:{
-        ticks:{color:'#aaa',maxRotation:60,minRotation:45},
-        grid:{display:false}
-      },
-      y:{
-        ticks:{color:'#fff'},
-        grid:{color:'rgba(255,255,255,.08)'}
       }
     }
-  }
-});
+  });
 
-function ema(values, period){
-  const k=2/(period+1);
-  let previous=null;
-  return values.map(value=>{
-    previous = previous===null ? value : value*k+previous*(1-k);
-    return previous;
+  chart.canvas.addEventListener('mousemove',e=>{
+    if(smoothMode)return;
+    const active=chart.getElementsAtEventForMode(e,'index',{intersect:false},true);
+    renderHover(active);
+  });
+  chart.canvas.addEventListener('mouseleave',()=>{
+    document.getElementById('hoverBox').style.display='none';
   });
 }
+initChart();
 
-function render(){
-  $('hoverBox').style.display='none';
-  timestamps = [...new Set(
-    [...assets.values()].flatMap(asset=>asset.candles.map(row=>row.ts))
-  )].sort((a,b)=>a-b);
-
-  const labels=timestamps.map(ts=>new Date(ts).toLocaleString());
-  const datasets=[];
-  const scales={x:{display:false}};
-
-  [...assets.values()].forEach((asset,index)=>{
-    const axis='price'+index;
-    const volumeAxis='volume'+index;
-    const candles=new Map(asset.candles.map(row=>[row.ts,row]));
-    asset.byTime=candles;
-
-    scales[axis]={
-      type:'linear',position:'left',
-      grid:{drawOnChartArea:index===0,color:'rgba(255,255,255,.08)'},
-      ticks:{color:asset.color,callback:fmt}
+function ensureAxis(id,color,grid){
+  const s=chart.options.scales;
+  if(!s[id]){
+    s[id]={
+      type:'linear',
+      position:'left',
+      grid:{color:'rgba(255,255,255,0.08)',drawOnChartArea:grid},
+      ticks:{color:color,callback:v=>Number(v).toFixed(3)}
     };
-    scales[volumeAxis]={
-      type:'linear',position:'right',beginAtZero:true,
+  }else{
+    s[id].ticks.color=color;
+  }
+}
+function ensureVolAxis(id,color){
+  const s=chart.options.scales;
+  if(!s[id]){
+    s[id]={
+      type:'linear',
+      position:'right',
       grid:{drawOnChartArea:false},
       ticks:{
-        color:asset.color,
-        callback:value=>value>=1e9?(value/1e9).toFixed(1)+'B':
-          value>=1e6?(value/1e6).toFixed(1)+'M':
-          value>=1e3?(value/1e3).toFixed(1)+'K':fmt(value)
+        color:color,
+        callback:v=>v>1e9?(v/1e9).toFixed(1)+'B':
+                     v>1e6?(v/1e6).toFixed(1)+'M':
+                     v>1e3?(v/1e3).toFixed(1)+'K':v
       }
     };
-
-    datasets.push({
-      type:'bar',
-      label:asset.label+' Amount',
-      data:timestamps.map(ts=>candles.get(ts)?.qv ?? null),
-      yAxisID:volumeAxis,
-      backgroundColor:rgba(asset.color,.3),
-      borderWidth:0,order:2
-    },{
-      type:'line',
-      label:`${asset.label} (${loadedBar || currentBar})`,
-      data:timestamps.map(ts=>candles.get(ts)?.c ?? null),
-      yAxisID:axis,
-      borderColor:asset.color,backgroundColor:'transparent',
-      borderWidth:2,
-      tension:smoothMode?.5:0,
-      pointRadius:smoothMode?0:3,
-      spanGaps:false,order:1
-    });
-  });
-
-  chart.data={labels,datasets};
-  chart.options.scales=scales;
-  chart.update('none');
-  renderMACD(labels);
-}
-
-function renderMACD(labels){
-  const primary=assets.get(primarySymbol);
-  macdChart.data={labels:[],datasets:[]};
-  if(!primary){macdChart.update('none');return;}
-
-  const closes=primary.candles.map(row=>row.c);
-  const fast=ema(closes,12),slow=ema(closes,26);
-  const dif=fast.map((value,index)=>value-slow[index]);
-  const dea=ema(dif,9);
-  const values=new Map();
-  primary.candles.forEach((row,index)=>{
-    values.set(row.ts,{
-      dif:dif[index],dea:dea[index],
-      buy:index>0&&dif[index-1]<=dea[index-1]&&dif[index]>dea[index],
-      sell:index>0&&dif[index-1]>=dea[index-1]&&dif[index]<dea[index]
-    });
-  });
-
-  const makeLine=(label,key,color)=>({
-    type:'line',label,
-    data:timestamps.map(ts=>values.get(ts)?.[key] ?? null),
-    borderColor:color,borderWidth:1.5,
-    pointRadius:0,tension:0,spanGaps:false
-  });
-  const makeCross=(label,key,color)=>({
-    type:'line',label,showLine:false,
-    data:timestamps.map(ts=>{
-      const value=values.get(ts);
-      return value?.[key]?value.dif:null;
-    }),
-    pointRadius:4,backgroundColor:color,borderColor:color
-  });
-
-  macdChart.data={
-    labels,
-    datasets:[
-      makeLine('DIF','dif','#ffd700'),
-      makeLine('DEA','dea','#ff4c4c'),
-      makeCross('Golden Cross','buy',GREEN),
-      makeCross('Dead Cross','sell','#ff6ad5')
-    ]
-  };
-  macdChart.update('none');
-}
-
-// 请求按批次提交，旧请求不会覆盖新选择；失败保留之前的图。
-async function commit(desired, primary, batch){
-  const id=++generation;
-  const bar=currentBar;
-  busy=true;
-  status('Loading…');
-  try{
-    const results=await Promise.all(
-      [...desired.values()].map(async asset=>({
-        ...asset,candles:await fetchCandles(asset,bar)
-      }))
-    );
-    if(id!==generation) return;
-    assets=new Map(results.map(asset=>[asset.key,asset]));
-    primarySymbol=primary;
-    lastBatch=batch;
-    loadedBar=bar;
-    $('addBtn').textContent=lastBatch.length?'Delete Coin':'Add Coin';
-    render();
-    status('Last updated: '+new Date().toLocaleTimeString());
-  }catch(error){
-    if(id===generation){
-      status(error.message+'；原图保留。',true);
-    }
-  }finally{
-    if(id===generation) busy=false;
+  }else{
+    s[id].ticks.color=color;
   }
+}
+function removeAxis(id){
+  if(chart.options.scales[id])delete chart.options.scales[id];
+}
+
+async function fetchCandles(sym,bar,limit=60){
+  const u=`https://www.okx.com/api/v5/market/candles?instId=${sym}-USDT&bar=${bar}&limit=${limit}`;
+  const r=await fetch(u);
+  const j=await r.json();
+  const raw=(j&&j.data)?j.data.reverse():[];
+  const labels=raw.map(d=>new Date(+d[0]).toLocaleString());
+  const candles=raw.map(d=>({ts:+d[0],o:+d[1],h:+d[2],l:+d[3],c:+d[4],qv:+(d[6]||0)}));
+  return{labels,candles};
+}
+
+async function addOrUpdate(sym,color,axis,grid=false){
+  sym=sym.toUpperCase();
+  ensureAxis(axis,color,grid);
+  const volAxis=`yVol_${sym}`;
+  ensureVolAxis(volAxis,color);
+  const {labels,candles}=await fetchCandles(sym,currentBar,60);
+
+  if(chart.data.labels.length===0)chart.data.labels=labels;
+
+  // 主币的收盘数据留给 MACD 用
+  if(sym===primarySymbol){
+    primaryCandles=candles;
+    updateMACDChart();
+  }
+
+  let line=chart.data.datasets.find(d=>d.metaSymbol===sym&&d.type==='line');
+  if(!line){
+    line={
+      type:'line',
+      label:`${sym}/USDT (${currentBar})`,
+      data:candles.map(x=>x.c),
+      borderColor:color,
+      backgroundColor:'transparent',
+      borderWidth:2,
+      tension:chart.options.elements.line.tension,
+      pointRadius:chart.options.elements.point.radius,
+      order:1,
+      yAxisID:axis,
+      metaSymbol:sym,
+      metaCandles:candles
+    };
+    chart.data.datasets.push(line);
+  }else{
+    line.data=candles.map(x=>x.c);
+    line.metaCandles=candles;
+    line.label=`${sym}/USDT (${currentBar})`;
+  }
+
+  let bar=chart.data.datasets.find(d=>d.metaSymbol===sym&&d.type==='bar');
+  const baseRGBA=hexToRGBA(color,0.3);
+  if(!bar){
+    bar={
+      type:'bar',
+      label:`${sym} Volume`,
+      yAxisID:volAxis,
+      backgroundColor:baseRGBA,
+      borderWidth:0,
+      order:0,
+      data:candles.map(x=>x.qv),
+      metaSymbol:sym,
+      metaBaseRGBA:baseRGBA,
+      metaVolAxis:volAxis
+    };
+    chart.data.datasets.unshift(bar);
+  }else{
+    bar.data=candles.map(x=>x.qv);
+    bar.backgroundColor=baseRGBA;
+    bar.metaVolAxis=volAxis;
+  }
+
+  chart.update();
+  document.getElementById('updateTime').innerText='Last updated: '+new Date().toLocaleTimeString();
 }
 
 async function loadPrimary(){
-  try{
-    const raw=$('coinInput').value.trim();
-    const desired=new Map(assets);
-    if(primarySymbol) desired.delete(primarySymbol);
-    if(!raw){
-      ++generation;busy=false;
-      assets=desired;primarySymbol=null;
-      lastBatch=lastBatch.filter(key=>assets.has(key));
-      $('addBtn').textContent=lastBatch.length?'Delete Coin':'Add Coin';
-      render();status('Ready.');return;
+  const axesToRemove=new Set();
+  chart.data.datasets=chart.data.datasets.filter(d=>{
+    if(d.yAxisID==='y0'){
+      axesToRemove.add(d.yAxisID);
+      if(d.metaVolAxis)axesToRemove.add(d.metaVolAxis);
+      return false;
     }
-    const asset=parseSymbol(raw);
-    desired.set(asset.key,{...asset,color:GREEN});
-    await commit(
-      desired,asset.key,
-      lastBatch.filter(key=>key!==asset.key&&desired.has(key))
-    );
-  }catch(error){status(error.message,true);}
+    return true;
+  });
+  removeAxis('y0');
+  axesToRemove.forEach(a=>removeAxis(a));
+
+  const val=(document.getElementById('coinInput').value||'').trim();
+  if(!val){
+    primarySymbol=null;
+    primaryCandles=[];
+    clearMACDChart();
+    chart.update();
+    return;
+  }
+  primarySymbol=val.toUpperCase();
+
+  if(chart.data.datasets.length===0)chart.data.labels=[];
+  await addOrUpdate(primarySymbol,GREEN,'y0',true);
 }
 
-function setBar(bar){
-  currentBar=bar;
-  if(assets.size) commit(new Map(assets),primarySymbol,[...lastBatch]);
+async function setBar(b){
+  currentBar=b;
+  chart.data.labels=[];
+  primaryCandles=[];
+  for(const ds of[...chart.data.datasets.filter(d=>d.type==='line')]){
+    await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+  }
+  updateMACDChart();
 }
+
 function toggleSmooth(){
   smoothMode=!smoothMode;
-  render();
+  chart.options.elements.line.tension=smoothMode?0.5:0;
+  chart.options.elements.point.radius=smoothMode?0:3;
+  chart.data.datasets.filter(d=>d.type==='line').forEach(d=>{
+    d.tension=chart.options.elements.line.tension;
+    d.pointRadius=chart.options.elements.point.radius;
+  });
+  if(smoothMode)document.getElementById('hoverBox').style.display='none';
+  chart.update();
 }
 
-$('addBtn').onclick=()=>{
-  if(lastBatch.length){
-    ++generation;busy=false;
-    lastBatch.forEach(key=>{
-      if(key!==primarySymbol) assets.delete(key);
-    });
-    lastBatch=[];
-    $('addBtn').textContent='Add Coin';
-    $('mapContainer').classList.remove('active');
-    render();
-    status('Last batch removed.');
+// Add / Delete Coin 区域
+const mapContainer=document.getElementById('mapContainer');
+const addBtn=document.getElementById('addBtn');
+const confirmBtn=document.getElementById('confirmBtn');
+const newCoin=document.getElementById('newCoin');
+addBtn.addEventListener('click',()=>{
+  if(addBtn.textContent==='Add Coin'){
+    mapContainer.classList.add('active');
+    newCoin.focus();
   }else{
-    $('mapContainer').classList.toggle('active');
-    if($('mapContainer').classList.contains('active')) $('newCoin').focus();
-  }
-};
-
-$('confirmBtn').onclick=async()=>{
-  try{
-    const raw=$('newCoin').value.trim();
-    if(!raw)return;
-    const entries=raw.split(/[,，\s]+/).filter(Boolean).map(parseSymbol);
-    const desired=new Map(assets);
-    const batch=[];
-    for(const asset of entries){
-      if(desired.has(asset.key))continue;
-      const color=palette[desired.size%palette.length];
-      desired.set(asset.key,{...asset,color});
-      batch.push(asset.key);
+    if(lastBatch.length){
+      const axes=new Set();
+      chart.data.datasets=chart.data.datasets.filter(d=>{
+        const hit=lastBatch.includes(d.metaSymbol);
+        if(hit){
+          axes.add(d.yAxisID);
+          if(d.metaVolAxis)axes.add(d.metaVolAxis);
+        }
+        return !hit;
+      });
+      axes.forEach(id=>removeAxis(id));
+      chart.update();
+      lastBatch=[];
     }
-    if(!batch.length){status('这些标的已经在图中。');return;}
-    await commit(desired,primarySymbol,batch);
-  }catch(error){status(error.message,true);}
-};
-
-$('coinInput').onkeydown=event=>{
-  if(event.key==='Enter')loadPrimary();
-};
-$('newCoin').onkeydown=event=>{
-  if(event.key==='Enter')$('confirmBtn').click();
-};
-
-chart.canvas.addEventListener('mousemove',event=>{
-  if(smoothMode)return;
-  const points=chart.getElementsAtEventForMode(
-    event,'index',{intersect:false},true
-  );
-  if(!points.length){$('hoverBox').style.display='none';return;}
-  const ts=timestamps[points[0].index];
-  const list=[...assets.values()];
-  $('hoverTs').textContent='Time: '+new Date(ts).toLocaleString();
-  $('hoverCoins').replaceChildren();
-  $('hoverRows').replaceChildren();
-
-  const heading=document.createElement('span');
-  heading.className='field-label';
-  heading.textContent='Coins:';
-  $('hoverCoins').append(heading);
-  for(const asset of list){
-    const cell=document.createElement('span');
-    cell.className='coin-cell';
-    cell.style.color=asset.color;
-    cell.textContent=asset.label;
-    $('hoverCoins').append(cell);
+    addBtn.textContent='Add Coin';
+    mapContainer.classList.remove('active');
   }
-
-  for(const [name,key] of [
-    ['Open','o'],['High','h'],['Low','l'],
-    ['Close','c'],['Amount','qv']
-  ]){
-    const row=document.createElement('div');
-    row.className='hover-line';
-    const label=document.createElement('span');
-    label.className='field-label';
-    label.textContent=name+':';
-    row.append(label);
-    for(const asset of list){
-      const cell=document.createElement('span');
-      cell.className='coin-cell';
-      cell.style.color=asset.color;
-      const value=asset.byTime?.get(ts)?.[key];
-      cell.textContent=fmt(value);
-      if(key==='qv'&&Number.isFinite(value)){
-        cell.textContent+=' '+(asset.kind==='future'?'CNY':'USDT');
-      }
-      row.append(cell);
-    }
-    $('hoverRows').append(row);
-  }
-  $('hoverBox').style.display='flex';
 });
-chart.canvas.addEventListener('mouseleave',()=>{
-  $('hoverBox').style.display='none';
+confirmBtn.addEventListener('click',async()=>{
+  const raw=newCoin.value.trim();
+  if(!raw)return;
+  const all=[...new Set(raw.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean))];
+  if(!all.length)return;
+  lastBatch=[];
+  let axisCount=Object.keys(chart.options.scales).filter(k=>k.startsWith('y')&&k!=='y0').length;
+  let i=0;
+  if(chart.data.datasets.length===0)chart.data.labels=[];
+  for(const sym of all){
+    const exist=chart.data.datasets.find(d=>d.metaSymbol===sym&&d.type==='line');
+    if(exist){
+      await addOrUpdate(sym,exist.borderColor,exist.yAxisID,exist.yAxisID==='y0');
+      continue;
+    }
+    const color=palette[i%palette.length];
+    i++;
+    const axis='y'+(axisCount+i);
+    await addOrUpdate(sym,color,axis,false);
+    lastBatch.push(sym);
+  }
+  addBtn.textContent='Delete Coin';
 });
 
-setInterval(()=>{
-  if(!document.hidden&&!busy&&assets.size){
-    commit(new Map(assets),primarySymbol,[...lastBatch]);
+// 悬浮框
+function renderHover(active){
+  const box=document.getElementById('hoverBox');
+  const rows=document.getElementById('hoverRows');
+  const ts=document.getElementById('hoverTs');
+  const coins=document.getElementById('hoverCoins');
+  if(!active||!active.length){
+    box.style.display='none';
+    return;
   }
-},10000);
+  const idx=active[0].index;
+  const fieldNames=['Open','High','Low','Close','QVol (USDT)'];
+  const fieldKeys=['o','h','l','c','qv'];
+  const symbols=[];
+  let tsText='';
+  const byCoin={};
+
+  chart.data.datasets.filter(d=>d.type==='line').forEach(ds=>{
+    const c=ds.metaCandles?.[idx];
+    if(!c)return;
+    if(!tsText)tsText=new Date(c.ts).toLocaleString();
+    symbols.push({name:ds.metaSymbol,color:ds.borderColor});
+    byCoin[ds.metaSymbol]=c;
+  });
+
+  ts.textContent='Time: '+tsText;
+  coins.innerHTML='Coins: '+symbols.map(s=>`<span style="color:${s.color};margin-right:8px">${s.name}</span>`).join('');
+
+  const html=fieldNames.map((name,i)=>{
+    const key=fieldKeys[i];
+    let line=`<span class="field-label">${name}:</span>`;
+    symbols.forEach(s=>{
+      const c=byCoin[s.name];
+      const val=c?fmtVal(c[key],key==='qv'):'–';
+      line+=`<span class="coin-cell" style="color:${s.color}">${val}</span>`;
+    });
+    return`<div class="hover-line">${line}</div>`;
+  }).join('');
+  rows.innerHTML=html;
+  box.style.display='flex';
+}
+
+// MACD 相关
+function ema(values,period){
+  const k=2/(period+1);
+  const out=[];
+  let prev=null;
+  for(let i=0;i<values.length;i++){
+    const v=values[i];
+    if(prev===null){
+      prev=v;
+    }else{
+      prev=v*k+prev*(1-k);
+    }
+    out.push(prev);
+  }
+  return out;
+}
+function computeMACD(closes,shortP=12,longP=26,signalP=9){
+  if(!closes||closes.length===0)return{dif:[],dea:[]};
+  const emaShort=ema(closes,shortP);
+  const emaLong=ema(closes,longP);
+  const dif=emaShort.map((v,i)=>v-emaLong[i]);
+  const dea=ema(dif,signalP);
+  return{dif,dea};
+}
+function clearMACDChart(){
+  macdChart.data.labels=[];
+  macdChart.data.datasets=[];
+  macdChart.update();
+}
+function updateMACDChart(){
+  if(!primarySymbol||!primaryCandles.length){
+    clearMACDChart();
+    return;
+  }
+  const labels=chart.data.labels.slice();
+  const closes=primaryCandles.map(c=>c.c);
+  const {dif,dea}=computeMACD(closes);
+
+  const crossBuy=[];
+  const crossSell=[];
+  for(let i=1;i<dif.length;i++){
+    const prevDif=dif[i-1],prevDea=dea[i-1];
+    const curDif=dif[i],curDea=dea[i];
+    if(prevDif<=prevDea && curDif>curDea){
+      crossBuy.push({x:i,y:curDif});
+    }else if(prevDif>=prevDea && curDif<curDea){
+      crossSell.push({x:i,y:curDif});
+    }
+  }
+
+  macdChart.data.labels=labels;
+  macdChart.data.datasets=[
+    {
+      type:'line',
+      label:'DIF',
+      data:dif,
+      borderColor:DIF_COLOR,
+      backgroundColor:'transparent',
+      borderWidth:1.5,
+      tension:0,
+      pointRadius:0
+    },
+    {
+      type:'line',
+      label:'DEA',
+      data:dea,
+      borderColor:DEA_COLOR,
+      backgroundColor:'transparent',
+      borderWidth:1.5,
+      tension:0,
+      pointRadius:0
+    },
+    {
+      type:'scatter',
+      label:'Golden Cross',
+      data:crossBuy,
+      showLine:false,
+      pointRadius:4,
+      backgroundColor:'#00ff88'
+    },
+    {
+      type:'scatter',
+      label:'Dead Cross',
+      data:crossSell,
+      showLine:false,
+      pointRadius:4,
+      backgroundColor:'#ff6ad5'
+    }
+  ];
+  macdChart.update();
+}
+
+// 定时刷新
+async function refreshAll(){
+  for(const ds of[...chart.data.datasets.filter(d=>d.type==='line')]){
+    await addOrUpdate(ds.metaSymbol,ds.borderColor,ds.yAxisID,ds.yAxisID==='y0');
+  }
+  updateMACDChart();
+}
+setInterval(refreshAll,10000);
 </script>
 </body>
 </html>
